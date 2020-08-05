@@ -27,8 +27,8 @@ l2 = 100
 linewidth = 2
 bob1_radius = 10
 bob2_radius = 10
-m1 = 1
-m2 = 5
+m1 = 5
+m2 = 2
 g = 9.81
 
 total_time_steps = 100_000
@@ -138,20 +138,13 @@ def generate_initial_conditions():
 # Move pendulum
 def move_pendulum(elements, time_step, initial_conditions):
 	# Testing different versions of time
-	time_array = np.arange(time_step-19,time_step+1)
-	assert len(time_array) == 20
-	assert time_array[-1] == time_step
-	if time_step >= 19:
-		y = odeint(derivatives, initial_conditions, time_array, args=(l1, l2, m1, m2))
-		theta1 = y[-1][0]
-		theta2 = y[-1][2]
-		initial_conditions = y[1]
-	else:
-		# Get rid of negative values
-		time_array = time_array + (19-time_step)
-		y = odeint(derivatives, initial_conditions, time_array, args=(l1, l2, m1, m2))
-		theta1 = y[time_step][0]
-		theta2 = y[time_step][1]
+	time_array = np.arange(time_step,time_step+50)
+	assert len(time_array) == 50
+	assert time_array[0] == time_step
+	y = odeint(derivatives, initial_conditions, time_array, args=(l1, l2, m1, m2))
+	theta1 = y[-1][0]
+	theta2 = y[-1][2]
+	initial_conditions = y[1]
 
 
 	limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, theta1)
@@ -169,10 +162,10 @@ def move_pendulum(elements, time_step, initial_conditions):
 def run_simulation(total_time_steps, elements, initial_conditions):
 	for time_step in range(total_time_steps):
 		theta1, theta2, initial_conditions = move_pendulum(elements, time_step, initial_conditions)
-		print(initial_conditions)
 		elements["theta1"] = theta1
 		elements["theta2"] = theta2
 		window.update()
+		#time.sleep(0.01)
 	window.mainloop() # draw the window
 '''
 environment stuff that may be useful later
