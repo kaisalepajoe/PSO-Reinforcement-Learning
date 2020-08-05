@@ -137,7 +137,7 @@ def generate_initial_conditions():
 
 # Move pendulum
 def move_pendulum(elements, time_step, initial_conditions):
-	# Testing different versions of time
+
 	time_array = np.arange(time_step,time_step+50)
 	assert len(time_array) == 50
 	assert time_array[0] == time_step
@@ -145,7 +145,6 @@ def move_pendulum(elements, time_step, initial_conditions):
 	theta1 = y[-1][0]
 	theta2 = y[-1][2]
 	initial_conditions = y[1]
-
 
 	limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, theta1)
 	limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, theta2)
@@ -160,12 +159,13 @@ def move_pendulum(elements, time_step, initial_conditions):
 	return theta1, theta2, initial_conditions
 
 def run_simulation(total_time_steps, elements, initial_conditions):
-	for time_step in range(total_time_steps):
+	time_step = 0
+	while True:
 		theta1, theta2, initial_conditions = move_pendulum(elements, time_step, initial_conditions)
 		elements["theta1"] = theta1
 		elements["theta2"] = theta2
 		window.update()
-		#time.sleep(0.01)
+		time_step += 1
 	window.mainloop() # draw the window
 '''
 environment stuff that may be useful later
