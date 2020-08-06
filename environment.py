@@ -35,6 +35,8 @@ g = 9.81
 
 total_time_steps = 100_000
 
+#######################################################################################
+
 # Create window
 def create_window():
 	window = tk.Tk()
@@ -72,6 +74,14 @@ def get_limb_end(x0, y0, length, angle):
 	x1 = x0 + length*np.sin(angle)
 	y1 = y0 + length*np.cos(angle)
 	return x1, y1
+
+def generate_initial_conditions():
+	theta1 = generate_random_angle()
+	theta2 = generate_random_angle()
+	z1 = 0
+	z2 = 0
+
+	return [theta1, z1, theta2, z2]
 
 def generate_random_angle():
 	'''
@@ -137,62 +147,67 @@ def derivatives(y, t, l1, l2, m1, m2, omega):
 
 	return dtheta1_dt, dz1_dt, dtheta2_dt, dz2_dt
 
-def generate_initial_conditions():
-	theta1 = generate_random_angle()
-	theta2 = generate_random_angle()
-	z1 = 0
-	z2 = 0
+#######################################################################################
 
-	return [theta1, z1, theta2, z2]
+class PendulumGame():
+	def __init__(self, env):
+		self.env = env
 
-# Creates a target circle in a random position on the screen
-# The target must be within the circle of radius l1+l2
-def create_target(canvas):
-	random_angle = np.random.random()*2*np.pi
-	random_radius = np.random.uniform(0, l1+l2)
-	x1, y1 = get_limb_end(window_width/2, window_height/2, random_radius, random_angle)
-	x0, y0, x1, y1 = get_corners(x1, y1, target_radius)
-	target = canvas.create_oval(x0, y0, x1, y1, fill="#C42021", outline="#C42021")
-	return target
+		self.window, self.canvas = create_window()
 
-# Move pendulum
-def move_pendulum(elements, time_step, initial_conditions, omega):
+		self.initial_conditions = generate_initial_conditions()
 
-	time_array = np.arange(time_step,time_step+2)
-	assert len(time_array) == 2
-	assert time_array[0] == time_step
-	y = odeint(derivatives, initial_conditions, time_array, args=(l1, l2, m1, m2, omega))
-	theta1 = y[-1][0]
-	theta2 = y[-1][2]
-	initial_conditions = y[1]
+		self.target = self.create_target()
+		self.elements = initial_draw(self.canvas, self.initial_conditions)
 
-	limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, theta1)
-	limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, theta2)
-	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius)
-	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius)
+	# Creates a target circle in a random position on the screen
+	# The target must be within the circle of radius l1+l2
+	def create_target(self):
+		random_angle = np.random.random()*2*np.pi
+		random_radius = np.random.uniform(0, l1+l2)
+		x1, y1 = get_limb_end(window_width/2, window_height/2, random_radius, random_angle)
+		x0, y0, x1, y1 = get_corners(x1, y1, target_radius)
+		target = self.canvas.create_oval(x0, y0, x1, y1, fill="#C42021", outline="#C42021")
+		return target
 
-	canvas.coords(elements["limb1"], x_center, y_center, limb1_x1, limb1_y1)
-	canvas.coords(elements["limb2"], limb1_x1, limb1_y1, limb2_x1, limb2_y1)
-	canvas.coords(elements["bob1"], bob1_x0, bob1_y0, bob1_x1, bob1_y1)
-	canvas.coords(elements["bob2"], bob2_x0, bob2_y0, bob2_x1, bob2_y1)
-	canvas.itemconfig(elements["text_box"], text=f"Omega : {omega}")
+	# Move pendulum
+	def move_pendulum(self, time_step, omega):
 
-	time.sleep(0.05)
+		time_array = np.arange(time_step,time_step+2)
+		assert len(time_array) == 2
+		assert time_array[0] == time_step
+		y = odeint(derivatives, self.initial_conditions, time_array, args=(l1, l2, m1, m2, omega))
+		theta1 = y[-1][0]
+		theta2 = y[-1][2]
+		self.initial_conditions = y[1]
 
-	return theta1, theta2, initial_conditions
+		limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, theta1)
+		limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, theta2)
+		bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius)
+		bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius)
 
-def run_simulation(total_time_steps, elements, initial_conditions):
-	time_step = 0
-	omega = 0
-	while True:
-		# try checking for button presses
+		self.canvas.coords(self.elements["limb1"], x_center, y_center, limb1_x1, limb1_y1)
+		self.canvas.coords(self.elements["limb2"], limb1_x1, limb1_y1, limb2_x1, limb2_y1)
+		self.canvas.coords(self.elements["bob1"], bob1_x0, bob1_y0, bob1_x1, bob1_y1)
+		self.canvas.coords(self.elements["bob2"], bob2_x0, bob2_y0, bob2_x1, bob2_y1)
+		self.canvas.itemconfig(self.elements["text_box"], text=f"Omega : {omega}")
 
-		theta1, theta2, initial_conditions = move_pendulum(elements, time_step, initial_conditions, omega)
-		elements["theta1"] = theta1
-		elements["theta2"] = theta2
-		window.update()
-		time_step += 1
-	window.mainloop() # draw the window
+		time.sleep(0.05)
+
+		return theta1, theta2
+
+	def run_simulation(self, total_time_steps):
+		time_step = 0
+		omega = 0
+		while True:
+			# try checking for button presses
+
+			theta1, theta2 = self.move_pendulum(time_step, omega)
+			self.elements["theta1"] = theta1
+			self.elements["theta2"] = theta2
+			self.window.update()
+			time_step += 1
+		self.window.mainloop() # draw the window
 '''
 environment stuff that may be useful later
 def bob(env):
@@ -211,9 +226,6 @@ def bob(env):
 if __name__ == '__main__':
 	finish_times = []
 	env = simpy.Environment()
-	window, canvas = create_window()
-	initial_conditions = generate_initial_conditions()
-	target = create_target(canvas)
-	elements = initial_draw(canvas, initial_conditions)
-	run_simulation(total_time_steps, elements, initial_conditions)
+	game = PendulumGame(env)
+	game.run_simulation(total_time_steps)
 	env.run()
