@@ -14,6 +14,7 @@ env = simpy.Environment()
 
 # Inspiration for how to solve Euler Lagrange https://scipython.com/blog/the-double-pendulum/
 # Tutorial for scipy's odeint https://www.youtube.com/watch?v=VV3BnroVjZo
+# simpy tutorial https://realpython.com/simpy-simulating-with-python/
 
 #####################################################
 
@@ -27,8 +28,9 @@ l2 = 100
 linewidth = 2
 bob1_radius = 10
 bob2_radius = 10
-m1 = 5
-m2 = 2
+target_radius = 5
+m1 = 4
+m2 = 4
 g = 9.81
 
 total_time_steps = 100_000
@@ -36,7 +38,7 @@ total_time_steps = 100_000
 # Create window
 def create_window():
 	window = tk.Tk()
-	canvas = tk.Canvas(window, width=window_width, height=window_height, bg="white")
+	canvas = tk.Canvas(window, width=window_width, height=window_height, bg="#FFFFFC")
 	canvas.grid() # tell tkinter where to place the canvas
 	window.title("Double Pendulum Environment")
 	return window, canvas
@@ -86,21 +88,25 @@ def initial_draw(canvas, initial_conditions):
 	limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, theta1)
 	limb1 = canvas.create_line(x_center, y_center, limb1_x1, limb1_y1, width=linewidth)
 
+	# Draw the centre pivot
+	cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1 = get_corners(x_center,y_center,10)
+	cpivot = canvas.create_oval(cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1, fill="black")
+
 	# Draw the second limb
 	limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, theta2)
 	limb2 = canvas.create_line(limb1_x1, limb1_y1, limb2_x1, limb2_y1, width=linewidth)
 
 	# Draw the first bob
 	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius)
-	bob1 = canvas.create_oval(bob1_x0, bob1_y0, bob1_x1, bob1_y1, fill="red")
+	bob1 = canvas.create_oval(bob1_x0, bob1_y0, bob1_x1, bob1_y1, fill="#44AFD6")
 
 	# Draw the second bob
 	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius)
-	bob2 = canvas.create_oval(bob2_x0, bob2_y0, bob2_x1, bob2_y1, fill="red")
+	bob2 = canvas.create_oval(bob2_x0, bob2_y0, bob2_x1, bob2_y1, fill="#227C9D")
 
-	# Draw the centre pivot
-	cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1 = get_corners(x_center,y_center,10)
-	cpivot = canvas.create_oval(cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1, fill="black")
+	# Draw text box
+	text_box = canvas.create_text(80,20,fill="black",font="Times 20 italic bold",
+                        text=f"Omega : {0}")
 
 	elements = {
 		"theta1":theta1,
@@ -109,20 +115,24 @@ def initial_draw(canvas, initial_conditions):
 		"limb2":limb2,
 		"bob1":bob1,
 		"bob2":bob2,
-		"cpivot":cpivot
+		"cpivot":cpivot,
+		"text_box":text_box
 	}
 	return elements
 
 # Returns derivatives for scipy's odeint function
-def derivatives(y, t, l1, l2, m1, m2):
-	theta1, z1, theta2, z2 = y 
+def derivatives(y, t, l1, l2, m1, m2, omega):
+	# testing omega
+	# swapping all z1 for z1 + omega with constant omega.
+	# Expecting a constant acceleration, leading to the pendulum spinning around counterclockwise
+	theta1, z1, theta2, z2 = y
 
-	dtheta1_dt = z1
+	dtheta1_dt = (z1 + omega)
 	dtheta2_dt = z2
 
-	dz1_dt = (m2*g*np.sin(theta2)*np.cos(theta1-theta2) - m2*np.sin(theta1-theta2)*(l1*z1**2*np.cos(theta1-theta2)+l2*z2**2) - (m1+m2)*g*np.sin(theta1))/\
+	dz1_dt = (m2*g*np.sin(theta2)*np.cos(theta1-theta2) - m2*np.sin(theta1-theta2)*(l1*(z1+omega)**2*np.cos(theta1-theta2)+l2*z2**2) - (m1+m2)*g*np.sin(theta1))/\
 		(l1*(m1+m2*np.sin(theta1-theta2)**2))
-	dz2_dt = ((m1+m2)*(l1*z1**2*np.sin(theta1-theta2)-g*np.sin(theta2)+g*np.sin(theta1)*np.cos(theta1-theta2))+m2*l2*z2**2*np.sin(theta1-theta2)*np.cos(theta1-theta2))/\
+	dz2_dt = ((m1+m2)*(l1*(z1+omega)**2*np.sin(theta1-theta2)-g*np.sin(theta2)+g*np.sin(theta1)*np.cos(theta1-theta2))+m2*l2*z2**2*np.sin(theta1-theta2)*np.cos(theta1-theta2))/\
 		(l2*(m1+m2*np.sin(theta1-theta2)**2))
 
 	return dtheta1_dt, dz1_dt, dtheta2_dt, dz2_dt
@@ -135,13 +145,23 @@ def generate_initial_conditions():
 
 	return [theta1, z1, theta2, z2]
 
-# Move pendulum
-def move_pendulum(elements, time_step, initial_conditions):
+# Creates a target circle in a random position on the screen
+# The target must be within the circle of radius l1+l2
+def create_target(canvas):
+	random_angle = np.random.random()*2*np.pi
+	random_radius = np.random.uniform(0, l1+l2)
+	x1, y1 = get_limb_end(window_width/2, window_height/2, random_radius, random_angle)
+	x0, y0, x1, y1 = get_corners(x1, y1, target_radius)
+	target = canvas.create_oval(x0, y0, x1, y1, fill="#C42021", outline="#C42021")
+	return target
 
-	time_array = np.arange(time_step,time_step+50)
-	assert len(time_array) == 50
+# Move pendulum
+def move_pendulum(elements, time_step, initial_conditions, omega):
+
+	time_array = np.arange(time_step,time_step+2)
+	assert len(time_array) == 2
 	assert time_array[0] == time_step
-	y = odeint(derivatives, initial_conditions, time_array, args=(l1, l2, m1, m2))
+	y = odeint(derivatives, initial_conditions, time_array, args=(l1, l2, m1, m2, omega))
 	theta1 = y[-1][0]
 	theta2 = y[-1][2]
 	initial_conditions = y[1]
@@ -155,13 +175,19 @@ def move_pendulum(elements, time_step, initial_conditions):
 	canvas.coords(elements["limb2"], limb1_x1, limb1_y1, limb2_x1, limb2_y1)
 	canvas.coords(elements["bob1"], bob1_x0, bob1_y0, bob1_x1, bob1_y1)
 	canvas.coords(elements["bob2"], bob2_x0, bob2_y0, bob2_x1, bob2_y1)
+	canvas.itemconfig(elements["text_box"], text=f"Omega : {omega}")
+
+	time.sleep(0.05)
 
 	return theta1, theta2, initial_conditions
 
 def run_simulation(total_time_steps, elements, initial_conditions):
 	time_step = 0
+	omega = 0
 	while True:
-		theta1, theta2, initial_conditions = move_pendulum(elements, time_step, initial_conditions)
+		# try checking for button presses
+
+		theta1, theta2, initial_conditions = move_pendulum(elements, time_step, initial_conditions, omega)
 		elements["theta1"] = theta1
 		elements["theta2"] = theta2
 		window.update()
@@ -180,11 +206,14 @@ def bob(env):
 		yield env.timeout(stop_duration)
 
 #env.process(bob(env))
-#env.run(until=15)
 '''
 
 if __name__ == '__main__':
+	finish_times = []
+	env = simpy.Environment()
 	window, canvas = create_window()
 	initial_conditions = generate_initial_conditions()
+	target = create_target(canvas)
 	elements = initial_draw(canvas, initial_conditions)
 	run_simulation(total_time_steps, elements, initial_conditions)
+	env.run()
