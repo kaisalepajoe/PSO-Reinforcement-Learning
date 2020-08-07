@@ -1,12 +1,9 @@
 # This is the double pendulum environment
 
 import numpy as np 
-import simpy
 import tkinter as tk 
 import time
 from scipy.integrate import odeint
-
-env = simpy.Environment()
 
 #####################################################
 
@@ -14,7 +11,6 @@ env = simpy.Environment()
 
 # Inspiration for how to solve Euler Lagrange https://scipython.com/blog/the-double-pendulum/
 # Tutorial for scipy's odeint https://www.youtube.com/watch?v=VV3BnroVjZo
-# simpy tutorial https://realpython.com/simpy-simulating-with-python/
 
 #####################################################
 
@@ -28,7 +24,7 @@ l2 = 100
 linewidth = 2
 bob1_radius = 10
 bob2_radius = 10
-target_radius = 5
+target_radius = 15
 m1 = 4
 m2 = 4
 g = 9.81
@@ -93,15 +89,18 @@ def derivatives(y, t, l1, l2, m1, m2, omega):
 #######################################################################################
 
 class PendulumGame():
-	def __init__(self, env):
-		self.env = env
+	def __init__(self):
 
 		self.window, self.canvas = create_window()
 
 		self.initial_conditions = generate_initial_conditions()
 
-		self.create_target()
 		self.initial_draw(self.canvas, self.initial_conditions)
+		self.create_target()
+
+		self.state = np.inf*np.ones(6)
+		self.state[0:4] = self.initial_conditions
+		self.state[4:6] = self.target_position
 
 	def initial_draw(self, canvas, initial_conditions):
 		self.theta1 = initial_conditions[0]
@@ -113,7 +112,7 @@ class PendulumGame():
 
 		# Draw the centre pivot
 		cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1 = get_corners(x_center,y_center,10)
-		cpivot = canvas.create_oval(cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1, fill="black")
+		self.cpivot = canvas.create_oval(cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1, fill="black")
 
 		# Draw the second limb
 		limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, self.theta2)
@@ -139,6 +138,8 @@ class PendulumGame():
 		x1, y1 = get_limb_end(window_width/2, window_height/2, random_radius, random_angle)
 		x0, y0, x1, y1 = get_corners(x1, y1, target_radius)
 		self.target = self.canvas.create_oval(x0, y0, x1, y1, fill="#C42021", outline="#C42021")
+		self.canvas.tag_lower(self.target, self.cpivot)
+		self.target_position = np.array([x1, y1])
 
 	# Move pendulum
 	def move_pendulum(self, time_step, omega):
@@ -147,6 +148,7 @@ class PendulumGame():
 		assert len(time_array) == 2
 		assert time_array[0] == time_step
 		y = odeint(derivatives, self.initial_conditions, time_array, args=(l1, l2, m1, m2, omega))
+		# fix index 0 instead of -1
 		self.theta1 = y[-1][0]
 		self.theta2 = y[-1][2]
 		self.initial_conditions = y[1]
@@ -161,54 +163,63 @@ class PendulumGame():
 		self.canvas.coords(self.bob1, bob1_x0, bob1_y0, bob1_x1, bob1_y1)
 		self.canvas.coords(self.bob2, bob2_x0, bob2_y0, bob2_x1, bob2_y1)
 		self.canvas.itemconfig(self.text_box, text=f"Omega : {omega}")
+		self.state[0:4] = np.array(y[-1])
 		time.sleep(0.05)
+
+	def update_policy(self):
+		pass
+
+	def check_target(self):
+		target_x0, target_y0, target_x1, target_y1 = self.canvas.coords(self.target)
+		target_x_center = target_x0 + (target_x1 - target_x0)/2
+		target_y_center = target_y0 + (target_y1 - target_y0)/2
+
+		bob2_x0, bob2_y0, bob2_x1, bob2_y1 = self.canvas.coords(self.bob2)
+		bob2_x_center = bob2_x0 + (bob2_x1 - bob2_x0)/2
+		bob2_y_center = bob2_y0 + (bob2_y1 - bob2_y0)/2
+
+		distance_between_centers = np.sqrt((target_x_center - bob2_x_center)**2 + (target_y_center - bob2_y_center)**2)
+		max_distance = bob2_radius + target_radius
+		if distance_between_centers < max_distance:
+			# hit
+			print("hit!")
+			self.canvas.delete(self.target)
+			self.create_target()
+			self.state[4:6] = self.target_position
+			reward = 100
+		else:
+			reward = -1
+		return reward
+
+	def game_step(self, time_step, omega):
+		self.move_pendulum(time_step, omega)
+		reward = self.check_target()
+		self.window.update()
+		next_state = self.state
+		return reward, next_state
+
+class Agent():
+	def __init__(self, game):
+		self.game = game
+		self.state = game.state
+		self.time_step = 0
+		self.total_reward = 0
 
 	def choose_omega(self):
 		omega = 0
 		return omega
 
-	def check_target(self):
-		target_x0, target_y0, target_x1, target_y1 = self.canvas.coords(self.target)
-		target_x_center = (target_x1 - target_x0)/2
-		target_y_center = (target_y1 - target_y0)/2
+	def update_policy(self):
+		pass
 
-		bob2_x0, bob2_y0, bob2_x1, bob2_y1 = self.canvas.coords(self.bob2)
-		bob2_x_center = (bob2_x1 - bob2_x0)/2
-		bob2_y_center = (bob2_y1 - bob2_y0)/2
-
-		distance_between_centers = np.sqrt((target_x_center - bob2_x_center)**2 + (target_y_center - bob2_y_center)**2)
-		max_distance = bob2_radius + target_radius
-		#if distance_between_centers < max_distance:
-		#	print("hit!")
-		print(distance_between_centers)
-
-	def run_game(self):
-		time_step = 0
+	def play(self):
 		while True:
 			omega = self.choose_omega()
-			self.move_pendulum(time_step, omega)
-			self.check_target()
-			self.window.update()
-			time_step += 1
-		self.window.mainloop() # draw the window
-'''
-environment stuff that may be useful later
-def bob(env):
-	while True:
-		print(f"Moving pendulum {env.now}")
-		moving_duration = 5
-		yield env.timeout(moving_duration)
-
-		print(f"Pendulum stopped {env.now}")
-		stop_duration = 3
-		yield env.timeout(stop_duration)
-
-#env.process(bob(env))
-'''
+			reward, next_state = self.game.game_step(self.time_step, omega)
+			self.update_policy()
 
 if __name__ == '__main__':
-	finish_times = []
-	env = simpy.Environment()
-	game = PendulumGame(env)
-	game.run_game()
-	env.run()
+	game = PendulumGame()
+	agent = Agent(game)
+	agent.play()
+	game.window.mainloop()
