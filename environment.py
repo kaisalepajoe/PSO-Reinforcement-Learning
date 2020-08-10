@@ -25,10 +25,11 @@ l2 = 100
 linewidth = 2
 bob1_radius = 10
 bob2_radius = 10
-target_radius = 15
+target_radius = 20
 m1 = 4
 m2 = 4
 g = 9.81
+theta_dot_max = 1.2
 
 # Set neural network parameters
 layer1 = 6
@@ -38,7 +39,7 @@ layer4 = 3
 learning_rate = 0.001
 gamma = 0.9
 epsilon = 1.0
-actions = np.array([-0.5, 0, 0.5])
+actions = np.array([-0.01, 0, 0.01])
 
 #######################################################################################
 
@@ -76,9 +77,10 @@ def generate_initial_conditions():
 
 def generate_random_angle():
 	'''
-	Returns a random angle between 0 and 2pi. No parameters.
+	Returns a random angle.
 	'''
-	return np.random.random()*2*np.pi
+	random_angle = np.random.random()*2*np.pi
+	return random_angle
 
 # Returns derivatives for scipy's odeint function
 def derivatives(y, t, l1, l2, m1, m2, omega):
@@ -87,7 +89,7 @@ def derivatives(y, t, l1, l2, m1, m2, omega):
 	# Expecting a constant acceleration, leading to the pendulum spinning around counterclockwise
 	theta1, z1, theta2, z2 = y
 
-	dtheta1_dt = (z1 + omega)
+	dtheta1_dt = z1 + omega
 	dtheta2_dt = z2
 
 	dz1_dt = (m2*g*np.sin(theta2)*np.cos(theta1-theta2) - m2*np.sin(theta1-theta2)*(l1*(z1+omega)**2*np.cos(theta1-theta2)+l2*z2**2) - (m1+m2)*g*np.sin(theta1))/\
@@ -105,9 +107,9 @@ class PendulumGame():
 		self.window, self.canvas = create_window()
 
 		self.initial_conditions = generate_initial_conditions()
+		self.hits = 0
 
 		self.initial_draw(self.canvas, self.initial_conditions)
-		self.create_target()
 
 		self.state = np.inf*np.ones(6)
 		self.state[0:4] = self.initial_conditions
@@ -137,19 +139,30 @@ class PendulumGame():
 		bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius)
 		self.bob2 = canvas.create_oval(bob2_x0, bob2_y0, bob2_x1, bob2_y1, fill="#227C9D")
 
-		# Draw text box
-		self.text_box = canvas.create_text(80,20,fill="black",font="Times 20 italic bold",
-	                        text=f"Omega : {0}")
+		# Draw text boxes
+		self.text_box_1 = canvas.create_text(80,20,fill="black",font="Times 20 italic bold",
+	                        text=f"Omega : ")
+		self.text_box_2 = canvas.create_text(160,20,fill="black",font="Times 20 italic bold",
+							text=f"0")
+
+		# Draw hits text box
+		self.text_box_rewards_1 = canvas.create_text(144,60,fill="black",font="Times 20 italic bold",
+							text=f"Number of hits : ")
+		self.text_box_rewards_2 = canvas.create_text(300,60,fill="black",font="Times 20 italic bold",
+							text=f"{self.hits}")
+
+		# Create first target
+		self.create_target()
 
 	# Creates a target circle in a random position on the screen
 	# The target must be within the circle of radius l1+l2
 	def create_target(self):
-		random_angle = np.random.random()*2*np.pi
+		random_angle = generate_random_angle()
 		random_radius = np.random.uniform(0, l1+l2)
 		x1, y1 = get_limb_end(window_width/2, window_height/2, random_radius, random_angle)
 		x0, y0, x1, y1 = get_corners(x1, y1, target_radius)
 		self.target = self.canvas.create_oval(x0, y0, x1, y1, fill="#C42021", outline="#C42021")
-		self.canvas.tag_lower(self.target, self.cpivot)
+		self.canvas.tag_lower(self.target)
 		self.target_position = np.array([x1, y1])
 
 	# Move pendulum
@@ -172,12 +185,10 @@ class PendulumGame():
 		self.canvas.coords(self.limb2, limb1_x1, limb1_y1, limb2_x1, limb2_y1)
 		self.canvas.coords(self.bob1, bob1_x0, bob1_y0, bob1_x1, bob1_y1)
 		self.canvas.coords(self.bob2, bob2_x0, bob2_y0, bob2_x1, bob2_y1)
-		self.canvas.itemconfig(self.text_box, text=f"Omega : {omega}")
+		self.canvas.itemconfig(self.text_box_2, text=f"{omega}")
+		self.canvas.itemconfig(self.text_box_rewards_2, text=f"{self.hits}")
 		self.state[0:4] = np.array(y[0])
 		time.sleep(0.05)
-
-	def update_policy(self):
-		pass
 
 	def check_target(self):
 		target_x0, target_y0, target_x1, target_y1 = self.canvas.coords(self.target)
@@ -192,13 +203,21 @@ class PendulumGame():
 		max_distance = bob2_radius + target_radius
 		if distance_between_centers < max_distance:
 			# hit
-			print("hit!")
 			self.canvas.delete(self.target)
 			self.create_target()
 			self.state[4:6] = self.target_position
-			reward = 100
+			reward = 500
+			self.hits += 1
 		else:
 			reward = -1
+
+		# Also check for maximum speed
+		theta1_dot = self.state[1]
+		theta2_dot = self.state[3]
+
+		if abs(theta1_dot) > theta_dot_max or abs(theta2_dot) > theta_dot_max:
+			reward -= 5
+
 		return reward
 
 	def game_step(self, time_step, omega):
@@ -226,8 +245,16 @@ class Agent():
 			torch.nn.ReLU(),
 			torch.nn.Linear(layer3, layer4),
 			torch.nn.ReLU())
+
 		self.loss_fn = torch.nn.MSELoss() # mean squared error
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+
+		checkpoint = torch.load('./statedict.pt')
+		self.model.load_state_dict(checkpoint['model_state_dict'])
+		self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+		self.loss = checkpoint['loss']
+
+		self.model.train()
 
 	def get_q_values_t(self, state, no_grad=False):
 		state_t = torch.from_numpy(state).float()
@@ -252,6 +279,13 @@ class Agent():
 			omega_index = self.epsilon_greedy(q_values_t)
 			omega = actions[omega_index]
 			reward, next_state = self.game.game_step(self.time_step, omega)
+			if reward >= 495:
+				print("Saved!")
+				# Save learned weights and biases
+				torch.save({
+	        		'model_state_dict': self.model.state_dict(),
+	        		'optimizer_state_dict': self.optimizer.state_dict(),
+	        		'loss': self.loss}, 'statedict.pt')
 			self.update_model(reward, next_state, q_values_t, omega_index)
 			self.state = next_state
 			self.time_step += 1
@@ -265,13 +299,10 @@ class Agent():
 		updated_q_values_t = q_values_t.clone()
 		updated_q_values_t[omega_index] = target_q_value
 
-		loss = self.loss_fn(q_values_t, updated_q_values_t)
+		self.loss = self.loss_fn(q_values_t, updated_q_values_t)
 		self.optimizer.zero_grad()
-		loss.backward()
+		self.loss.backward()
 		self.optimizer.step()
-
-
-
 
 #######################################################################################
 
