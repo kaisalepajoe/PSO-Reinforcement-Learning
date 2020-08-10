@@ -4,6 +4,7 @@ import numpy as np
 import tkinter as tk 
 import time
 from scipy.integrate import odeint
+import torch
 
 #####################################################
 
@@ -28,6 +29,16 @@ target_radius = 15
 m1 = 4
 m2 = 4
 g = 9.81
+
+# Set neural network parameters
+layer1 = 6
+layer2 = 150
+layer3 = 100
+layer4 = 3
+learning_rate = 0.001
+gamma = 0.9
+epsilon = 1.0
+actions = np.array([-0.5, 0, 0.5])
 
 #######################################################################################
 
@@ -148,9 +159,8 @@ class PendulumGame():
 		assert len(time_array) == 2
 		assert time_array[0] == time_step
 		y = odeint(derivatives, self.initial_conditions, time_array, args=(l1, l2, m1, m2, omega))
-		# fix index 0 instead of -1
-		self.theta1 = y[-1][0]
-		self.theta2 = y[-1][2]
+		self.theta1 = y[0][0]
+		self.theta2 = y[0][2]
 		self.initial_conditions = y[1]
 
 		limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, self.theta1)
@@ -163,7 +173,7 @@ class PendulumGame():
 		self.canvas.coords(self.bob1, bob1_x0, bob1_y0, bob1_x1, bob1_y1)
 		self.canvas.coords(self.bob2, bob2_x0, bob2_y0, bob2_x1, bob2_y1)
 		self.canvas.itemconfig(self.text_box, text=f"Omega : {omega}")
-		self.state[0:4] = np.array(y[-1])
+		self.state[0:4] = np.array(y[0])
 		time.sleep(0.05)
 
 	def update_policy(self):
@@ -198,25 +208,58 @@ class PendulumGame():
 		next_state = self.state
 		return reward, next_state
 
+#######################################################################################
+
 class Agent():
 	def __init__(self, game):
 		self.game = game
 		self.state = game.state
 		self.time_step = 0
 		self.total_reward = 0
+		self.create_neural_network()
 
 	def choose_omega(self):
-		omega = 0
+		state = torch.from_numpy(self.state).float()
+		q_values = self.model(state)
+		q_values = q_values.data.numpy()
+		omega = self.epsilon_greedy(q_values)
 		return omega
 
-	def update_policy(self):
-		pass
+	def epsilon_greedy(self, q_values):
+		if np.random.random() < epsilon:
+			omega = np.random.choice(actions)
+		else:
+			omega = actions[np.argmax(q_values)]
+		return omega
 
 	def play(self):
 		while True:
 			omega = self.choose_omega()
 			reward, next_state = self.game.game_step(self.time_step, omega)
-			self.update_policy()
+			#self.update_network()
+			self.state = next_state
+			self.time_step += 1
+
+	def create_neural_network(self):
+		self.model = torch.nn.Sequential(
+			torch.nn.Linear(layer1, layer2),
+			torch.nn.ReLU(),
+			torch.nn.Linear(layer2, layer3),
+			torch.nn.ReLU(),
+			torch.nn.Linear(layer3, layer4),
+			torch.nn.ReLU())
+		self.loss_fn = torch.nn.MSELoss() # mean squared error
+		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+
+	def update_network(self, current_state, omega_correct):
+		# Just for reference
+		omega_predicted = self.neural_network(current_state)
+		loss = self.loss_fn(omega_predicted, omega_correct)
+		self.optimizer.zero_grad()
+		loss.backward()
+		self.optimizer.step()
+
+#######################################################################################
 
 if __name__ == '__main__':
 	game = PendulumGame()
