@@ -229,17 +229,17 @@ class Agent():
 		self.loss_fn = torch.nn.MSELoss() # mean squared error
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
-	def get_q_values(self, state, no_grad=False):
-		state = torch.from_numpy(state).float()
+	def get_q_values_t(self, state, no_grad=False):
+		state_t = torch.from_numpy(state).float()
 		if no_grad == True:
 			with torch.no_grad():
-				q_values = self.model(state)
+				q_values_t = self.model(state_t)
 		else:
-			q_values = self.model(state)
-		q_values = q_values.data.numpy()
-		return q_values
+			q_values_t = self.model(state_t)
+		return q_values_t
 
-	def epsilon_greedy(self, q_values):
+	def epsilon_greedy(self, q_values_t):
+		q_values = q_values_t.detach().numpy()
 		if np.random.random() < epsilon:
 			omega_index = np.random.randint(0,3)
 		else:
@@ -248,24 +248,24 @@ class Agent():
 
 	def play(self):
 		while True:
-			q_values = self.get_q_values(self.state)
-			omega_index = self.epsilon_greedy(q_values)
+			q_values_t = self.get_q_values_t(self.state)
+			omega_index = self.epsilon_greedy(q_values_t)
 			omega = actions[omega_index]
 			reward, next_state = self.game.game_step(self.time_step, omega)
-			#self.update_model(reward, next_state, q_values, omega_index)
+			self.update_model(reward, next_state, q_values_t, omega_index)
 			self.state = next_state
 			self.time_step += 1
 
-	def update_model(self, reward, next_state, q_values, omega_index):
-		next_q_values = self.get_q_values(next_state, no_grad=True)
+	def update_model(self, reward, next_state, q_values_t, omega_index):
+		next_q_values_t = self.get_q_values_t(next_state, no_grad=True)
+		next_q_values = next_q_values_t.numpy()
 		max_next_q_value = np.max(next_q_values)
 		target_q_value = reward + gamma*max_next_q_value
 
-		q_values = torch.from_numpy(q_values).float()
-		updated_q_values = q_values.clone()
-		updated_q_values[omega_index] = target_q_value
+		updated_q_values_t = q_values_t.clone()
+		updated_q_values_t[omega_index] = target_q_value
 
-		loss = self.loss_fn(q_values, updated_q_values)
+		loss = self.loss_fn(q_values_t, updated_q_values_t)
 		self.optimizer.zero_grad()
 		loss.backward()
 		self.optimizer.step()
