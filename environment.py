@@ -218,28 +218,6 @@ class Agent():
 		self.total_reward = 0
 		self.create_neural_network()
 
-	def choose_omega(self):
-		state = torch.from_numpy(self.state).float()
-		q_values = self.model(state)
-		q_values = q_values.data.numpy()
-		omega = self.epsilon_greedy(q_values)
-		return omega
-
-	def epsilon_greedy(self, q_values):
-		if np.random.random() < epsilon:
-			omega = np.random.choice(actions)
-		else:
-			omega = actions[np.argmax(q_values)]
-		return omega
-
-	def play(self):
-		while True:
-			omega = self.choose_omega()
-			reward, next_state = self.game.game_step(self.time_step, omega)
-			#self.update_network()
-			self.state = next_state
-			self.time_step += 1
-
 	def create_neural_network(self):
 		self.model = torch.nn.Sequential(
 			torch.nn.Linear(layer1, layer2),
@@ -251,13 +229,49 @@ class Agent():
 		self.loss_fn = torch.nn.MSELoss() # mean squared error
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
-	def update_network(self, current_state, omega_correct):
-		# Just for reference
-		omega_predicted = self.neural_network(current_state)
-		loss = self.loss_fn(omega_predicted, omega_correct)
+	def get_q_values(self, state, no_grad=False):
+		state = torch.from_numpy(state).float()
+		if no_grad == True:
+			with torch.no_grad():
+				q_values = self.model(state)
+		else:
+			q_values = self.model(state)
+		q_values = q_values.data.numpy()
+		return q_values
+
+	def epsilon_greedy(self, q_values):
+		if np.random.random() < epsilon:
+			omega_index = np.random.randint(0,3)
+		else:
+			omega_index = np.argmax(q_values)
+		return omega_index
+
+	def play(self):
+		while True:
+			q_values = self.get_q_values(self.state)
+			omega_index = self.epsilon_greedy(q_values)
+			omega = actions[omega_index]
+			reward, next_state = self.game.game_step(self.time_step, omega)
+			#self.update_model(reward, next_state, q_values, omega_index)
+			self.state = next_state
+			self.time_step += 1
+
+	def update_model(self, reward, next_state, q_values, omega_index):
+		next_q_values = self.get_q_values(next_state, no_grad=True)
+		max_next_q_value = np.max(next_q_values)
+		target_q_value = reward + gamma*max_next_q_value
+
+		q_values = torch.from_numpy(q_values).float()
+		updated_q_values = q_values.clone()
+		updated_q_values[omega_index] = target_q_value
+
+		loss = self.loss_fn(q_values, updated_q_values)
 		self.optimizer.zero_grad()
 		loss.backward()
 		self.optimizer.step()
+
+
+
 
 #######################################################################################
 
