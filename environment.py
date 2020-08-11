@@ -25,21 +25,29 @@ l2 = 100
 linewidth = 2
 bob1_radius = 10
 bob2_radius = 10
-target_radius = 29
-m1 = 4
-m2 = 4
-g = 9.81
-theta_dot_max = 1.9
+target_radius = 28
 
 # Set neural network parameters
-actions = np.array([-0.1, -0.01, -0.005, 0, 0.005, 0.01, 0.1])
-layer1 = 6
+speed = 0.05
+actions = np.array([[-speed,-speed],
+					[-speed,0],
+					[-speed,speed],
+					[0,-speed],
+					[0,0],
+					[0,speed],
+					[speed,-speed],
+					[speed,0],
+					[speed,speed]])
+layer1 = 4
 layer2 = 150
 layer3 = 100
-layer4 = len(actions)
+layer4 = 9
 learning_rate = 0.001
 gamma = 0.9
-temperature = 10
+temperature = 5
+
+results_time_steps_with_hits = []
+#np.random.seed(123)
 
 #######################################################################################
 
@@ -48,7 +56,7 @@ def create_window():
 	window = tk.Tk()
 	canvas = tk.Canvas(window, width=window_width, height=window_height, bg="#FFFFFC")
 	canvas.grid() # tell tkinter where to place the canvas
-	window.title("Double Pendulum Environment")
+	window.title("Robot arm environment")
 	return window, canvas
 
 def get_corners(x, y, r):
@@ -70,10 +78,8 @@ def get_limb_end(x0, y0, length, angle):
 def generate_initial_conditions():
 	theta1 = generate_random_angle()
 	theta2 = generate_random_angle()
-	z1 = 0
-	z2 = 0
 
-	return [theta1, z1, theta2, z2]
+	return [theta1, theta2]
 
 def generate_random_angle():
 	'''
@@ -81,23 +87,6 @@ def generate_random_angle():
 	'''
 	random_angle = np.random.random()*2*np.pi
 	return random_angle
-
-# Returns derivatives for scipy's odeint function
-def derivatives(y, t, l1, l2, m1, m2, omega):
-	# testing omega
-	# swapping all z1 for z1 + omega with constant omega.
-	# Expecting a constant acceleration, leading to the pendulum spinning around counterclockwise
-	theta1, z1, theta2, z2 = y
-
-	dtheta1_dt = z1 + omega
-	dtheta2_dt = z2
-
-	dz1_dt = (m2*g*np.sin(theta2)*np.cos(theta1-theta2) - m2*np.sin(theta1-theta2)*(l1*(z1+omega)**2*np.cos(theta1-theta2)+l2*z2**2) - (m1+m2)*g*np.sin(theta1))/\
-		(l1*(m1+m2*np.sin(theta1-theta2)**2))
-	dz2_dt = ((m1+m2)*(l1*(z1+omega)**2*np.sin(theta1-theta2)-g*np.sin(theta2)+g*np.sin(theta1)*np.cos(theta1-theta2))+m2*l2*z2**2*np.sin(theta1-theta2)*np.cos(theta1-theta2))/\
-		(l2*(m1+m2*np.sin(theta1-theta2)**2))
-
-	return dtheta1_dt, dz1_dt, dtheta2_dt, dz2_dt
 
 #######################################################################################
 
@@ -111,13 +100,13 @@ class PendulumGame():
 
 		self.initial_draw(self.canvas, self.initial_conditions)
 
-		self.state = np.inf*np.ones(6)
-		self.state[0:4] = self.initial_conditions
-		self.state[4:6] = self.target_position
+		self.state = np.inf*np.ones(4)
+		self.state[0:2] = self.initial_conditions
+		self.state[2:4] = self.target_position
 
 	def initial_draw(self, canvas, initial_conditions):
 		self.theta1 = initial_conditions[0]
-		self.theta2 = initial_conditions[2]
+		self.theta2 = initial_conditions[1]
 
 		# Draw the first limb
 		limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, self.theta1)
@@ -133,22 +122,26 @@ class PendulumGame():
 
 		# Draw the first bob
 		bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius)
-		self.bob1 = canvas.create_oval(bob1_x0, bob1_y0, bob1_x1, bob1_y1, fill="#44AFD6")
+		self.bob1 = canvas.create_oval(bob1_x0, bob1_y0, bob1_x1, bob1_y1, fill="black")
 
 		# Draw the second bob
 		bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius)
 		self.bob2 = canvas.create_oval(bob2_x0, bob2_y0, bob2_x1, bob2_y1, fill="#227C9D")
 
 		# Draw text boxes
-		self.text_box_1 = canvas.create_text(80,20,fill="black",font="Times 20 italic bold",
-	                        text=f"Omega : ")
-		self.text_box_2 = canvas.create_text(160,20,fill="black",font="Times 20 italic bold",
+		self.text_box_1 = canvas.create_text(110,20,fill="black",font="Times 20 italic bold",
+	                        text=f"Limb1 speed : ")
+		self.text_box_2 = canvas.create_text(230,20,fill="black",font="Times 20 italic bold",
+							text=f"0")
+		self.text_box_3 = canvas.create_text(110,60,fill="black",font="Times 20 italic bold",
+							text=f"Limb2 speed : ")
+		self.text_box_4 = canvas.create_text(230,60,fill="black",font="Times 20 italic bold",
 							text=f"0")
 
 		# Draw hits text box
-		self.text_box_rewards_1 = canvas.create_text(144,60,fill="black",font="Times 20 italic bold",
+		self.text_box_rewards_1 = canvas.create_text(130,100,fill="black",font="Times 20 italic bold",
 							text=f"Number of hits : ")
-		self.text_box_rewards_2 = canvas.create_text(300,60,fill="black",font="Times 20 italic bold",
+		self.text_box_rewards_2 = canvas.create_text(300,100,fill="black",font="Times 20 italic bold",
 							text=f"{self.hits}")
 
 		# Create first target
@@ -165,16 +158,10 @@ class PendulumGame():
 		self.canvas.tag_lower(self.target)
 		self.target_position = np.array([x1, y1])
 
-	# Move pendulum
-	def move_pendulum(self, time_step, omega):
-
-		time_array = np.arange(time_step,time_step+2)
-		assert len(time_array) == 2
-		assert time_array[0] == time_step
-		y = odeint(derivatives, self.initial_conditions, time_array, args=(l1, l2, m1, m2, omega))
-		self.theta1 = y[0][0]
-		self.theta2 = y[0][2]
-		self.initial_conditions = y[1]
+	# Move robot arm
+	def move_arm(self, omega1, omega2):
+		self.theta1 += omega1
+		self.theta2 += omega2
 
 		limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, self.theta1)
 		limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, self.theta2)
@@ -185,10 +172,11 @@ class PendulumGame():
 		self.canvas.coords(self.limb2, limb1_x1, limb1_y1, limb2_x1, limb2_y1)
 		self.canvas.coords(self.bob1, bob1_x0, bob1_y0, bob1_x1, bob1_y1)
 		self.canvas.coords(self.bob2, bob2_x0, bob2_y0, bob2_x1, bob2_y1)
-		self.canvas.itemconfig(self.text_box_2, text=f"{omega}")
+		self.canvas.itemconfig(self.text_box_2, text=f"{omega1}")
+		self.canvas.itemconfig(self.text_box_4, text=f"{omega2}")
 		self.canvas.itemconfig(self.text_box_rewards_2, text=f"{self.hits}")
-		self.state[0:4] = np.array(y[0])
-		time.sleep(0.05)
+		self.state[0:2] = np.array([self.theta1, self.theta2])
+		#time.sleep(0.001)
 
 	def check_target(self):
 		target_x0, target_y0, target_x1, target_y1 = self.canvas.coords(self.target)
@@ -201,29 +189,21 @@ class PendulumGame():
 
 		distance_between_centers = np.sqrt((target_x_center - bob2_x_center)**2 + (target_y_center - bob2_y_center)**2)
 		max_distance = bob2_radius + target_radius
+
 		if distance_between_centers < max_distance:
 			# hit
 			self.canvas.delete(self.target)
 			self.create_target()
-			self.state[4:6] = self.target_position
-			reward = 500
+			self.state[2:4] = self.target_position
+			reward = 100
 			self.hits += 1
 		else:
-			reward = -1
-
-		# Also check for maximum speed
-		theta1_dot = self.state[1]
-		theta2_dot = self.state[3]
-		combined_theta_dot = np.sqrt((theta1_dot)**2 + (theta2_dot)**2)
-
-		if combined_theta_dot > theta_dot_max:
-			reward -= (combined_theta_dot - theta_dot_max)*50
-			print(f"Too fast! {reward}")
-
+			reward = 1/(distance_between_centers - max_distance)
+		print(reward)
 		return reward
 
-	def game_step(self, time_step, omega):
-		self.move_pendulum(time_step, omega)
+	def game_step(self, omega1, omega2):
+		self.move_arm(omega1, omega2)
 		reward = self.check_target()
 		self.window.update()
 		next_state = self.state
@@ -251,7 +231,7 @@ class Agent():
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
 		try:
-			checkpoint = torch.load('./statedict2.pt')
+			checkpoint = torch.load('./statedict.pt')
 			self.model.load_state_dict(checkpoint['model_state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 			self.loss = checkpoint['loss']
@@ -278,19 +258,31 @@ class Agent():
 		omega_index = np.random.choice(np.arange(0,len(actions)),p=probabilities)
 		return omega_index
 
+	def uniform_random(self, q_values_t):
+		return np.random.choice(np.arange(len(actions)))
+
 	def play(self):
 		while True:
 			q_values_t = self.get_q_values_t(self.state)
 			omega_index = self.softmax(q_values_t)
-			omega = actions[omega_index]
-			reward, next_state = self.game.game_step(self.time_step, omega)
-			if reward >= 449:
+			#omega = actions[omega_index]
+			# testing friction
+			omega1 = actions[omega_index][0]
+			omega2 = actions[omega_index][1]
+			reward, next_state = self.game.game_step(omega1, omega2)
+			if reward == 100:
+				results_time_steps_with_hits.append(self.time_step)
+				text_file = open("Output.txt", "w")
+				text_file.write(f"{results_time_steps_with_hits}")
+				text_file.close()
+
 				print("Saved!")
 				# Save learned weights and biases
 				torch.save({
 	        		'model_state_dict': self.model.state_dict(),
 	        		'optimizer_state_dict': self.optimizer.state_dict(),
-	        		'loss': self.loss}, 'statedict2.pt')
+	        		'loss': self.loss}, 'statedict.pt')
+	        
 			self.update_model(reward, next_state, q_values_t, omega_index)
 			self.state = next_state
 			self.time_step += 1
