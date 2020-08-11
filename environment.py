@@ -44,7 +44,7 @@ layer3 = 100
 layer4 = 9
 learning_rate = 0.001
 gamma = 0.9
-temperature = 5
+temperature = 1.12
 
 results_time_steps_with_hits = []
 #np.random.seed(123)
@@ -163,6 +163,18 @@ class PendulumGame():
 		self.theta1 += omega1
 		self.theta2 += omega2
 
+		# Angles cannot exceed 2pi!
+		if self.theta1 >= 2*np.pi:
+			self.theta1 = self.theta1 - 2*np.pi
+		if self.theta2 >= 2*np.pi:
+			self.theta2 = self.theta2 - 2*np.pi
+
+		# Angles cannot be less than 0
+		if self.theta1 < 0:
+			self.theta1 = self.theta1 + 2*np.pi
+		if self.theta2 < 0:
+			self.theta2 = self.theta2 + 2*np.pi
+
 		limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1, self.theta1)
 		limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2, self.theta2)
 		bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius)
@@ -241,6 +253,9 @@ class Agent():
 		self.model.train()
 
 	def get_q_values_t(self, state, no_grad=False):
+		# Normalize state
+		state = state/np.array([2*np.pi, 2*np.pi, window_width, window_height])
+		print(state)
 		state_t = torch.from_numpy(state).float()
 		if no_grad == True:
 			with torch.no_grad():
