@@ -25,21 +25,21 @@ l2 = 100
 linewidth = 2
 bob1_radius = 10
 bob2_radius = 10
-target_radius = 20
+target_radius = 29
 m1 = 4
 m2 = 4
 g = 9.81
-theta_dot_max = 1.2
+theta_dot_max = 1.9
 
 # Set neural network parameters
+actions = np.array([-0.1, -0.01, -0.005, 0, 0.005, 0.01, 0.1])
 layer1 = 6
 layer2 = 150
 layer3 = 100
-layer4 = 3
+layer4 = len(actions)
 learning_rate = 0.001
 gamma = 0.9
-epsilon = 1.0
-actions = np.array([-0.01, 0, 0.01])
+temperature = 10
 
 #######################################################################################
 
@@ -214,9 +214,11 @@ class PendulumGame():
 		# Also check for maximum speed
 		theta1_dot = self.state[1]
 		theta2_dot = self.state[3]
+		combined_theta_dot = np.sqrt((theta1_dot)**2 + (theta2_dot)**2)
 
-		if abs(theta1_dot) > theta_dot_max or abs(theta2_dot) > theta_dot_max:
-			reward -= 5
+		if combined_theta_dot > theta_dot_max:
+			reward -= (combined_theta_dot - theta_dot_max)*50
+			print(f"Too fast! {reward}")
 
 		return reward
 
@@ -234,7 +236,6 @@ class Agent():
 		self.game = game
 		self.state = game.state
 		self.time_step = 0
-		self.total_reward = 0
 		self.create_neural_network()
 
 	def create_neural_network(self):
@@ -249,11 +250,14 @@ class Agent():
 		self.loss_fn = torch.nn.MSELoss() # mean squared error
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
-		checkpoint = torch.load('./statedict.pt')
-		self.model.load_state_dict(checkpoint['model_state_dict'])
-		self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-		self.loss = checkpoint['loss']
-
+		try:
+			checkpoint = torch.load('./statedict2.pt')
+			self.model.load_state_dict(checkpoint['model_state_dict'])
+			self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+			self.loss = checkpoint['loss']
+			print("Loaded network")
+		except:
+			pass
 		self.model.train()
 
 	def get_q_values_t(self, state, no_grad=False):
@@ -265,27 +269,28 @@ class Agent():
 			q_values_t = self.model(state_t)
 		return q_values_t
 
-	def epsilon_greedy(self, q_values_t):
+	def softmax(self, q_values_t):
 		q_values = q_values_t.detach().numpy()
-		if np.random.random() < epsilon:
-			omega_index = np.random.randint(0,3)
-		else:
-			omega_index = np.argmax(q_values)
+		max_q_value = np.max(q_values)
+		numerator = np.exp((q_values-max_q_value)/temperature)
+		denominator = np.sum(np.exp((q_values-max_q_value)/temperature))
+		probabilities = numerator/denominator
+		omega_index = np.random.choice(np.arange(0,len(actions)),p=probabilities)
 		return omega_index
 
 	def play(self):
 		while True:
 			q_values_t = self.get_q_values_t(self.state)
-			omega_index = self.epsilon_greedy(q_values_t)
+			omega_index = self.softmax(q_values_t)
 			omega = actions[omega_index]
 			reward, next_state = self.game.game_step(self.time_step, omega)
-			if reward >= 495:
+			if reward >= 449:
 				print("Saved!")
 				# Save learned weights and biases
 				torch.save({
 	        		'model_state_dict': self.model.state_dict(),
 	        		'optimizer_state_dict': self.optimizer.state_dict(),
-	        		'loss': self.loss}, 'statedict.pt')
+	        		'loss': self.loss}, 'statedict2.pt')
 			self.update_model(reward, next_state, q_values_t, omega_index)
 			self.state = next_state
 			self.time_step += 1
