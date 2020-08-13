@@ -1,5 +1,3 @@
-# This is the double pendulum environment
-
 import numpy as np 
 import random
 import tkinter as tk 
@@ -13,6 +11,7 @@ import torch
 
 # Inspiration for how to solve Euler Lagrange https://scipython.com/blog/the-double-pendulum/
 # Tutorial for scipy's odeint https://www.youtube.com/watch?v=VV3BnroVjZo
+# Book: Deep Reinforcement Learning in Action
 
 #####################################################
 
@@ -43,14 +42,13 @@ layer1 = 4
 layer2 = 150
 layer3 = 100
 layer4 = 9
-learning_rate = 0.001
-gamma = 0.9
-temperature = 1.12
+learning_rate = 0.0009
+gamma = 0.99
 
-memory_size = 5000
-batch_size = 300
+training_sessions = 6000
+maximum_batch_size = 6000
 
-results_time_steps_with_hits = []
+hit_time_steps = []
 #np.random.seed(123)
 
 #######################################################################################
@@ -104,10 +102,12 @@ class PendulumGame():
 
 		self.initial_draw(self.canvas, self.initial_conditions)
 
-		self.state = np.inf*np.ones(4)
+		self.state = np.zeros(4)
 		self.state[0:2] = self.initial_conditions
 		self.state[2:4] = self.target_position
-		self.state = torch.from_numpy(self.state).float()
+
+		# Normalise state
+		self.state = self.state / np.array([2*np.pi, 2*np.pi, 2*np.pi, l1+l2])
 
 	def initial_draw(self, canvas, initial_conditions):
 		self.theta1 = initial_conditions[0]
@@ -161,7 +161,7 @@ class PendulumGame():
 		x0, y0, x1, y1 = get_corners(x1, y1, target_radius)
 		self.target = self.canvas.create_oval(x0, y0, x1, y1, fill="#C42021", outline="#C42021")
 		self.canvas.tag_lower(self.target)
-		self.target_position = np.array([x1, y1])
+		self.target_position = np.array([random_angle, random_radius])
 
 	# Move robot arm
 	def move_arm(self, omega1, omega2):
@@ -192,7 +192,9 @@ class PendulumGame():
 		self.canvas.itemconfig(self.text_box_2, text=f"{omega1}")
 		self.canvas.itemconfig(self.text_box_4, text=f"{omega2}")
 		self.canvas.itemconfig(self.text_box_rewards_2, text=f"{self.hits}")
-		self.state[0:2] = torch.Tensor([self.theta1, self.theta2])
+		self.state[0:2] = np.array([self.theta1, self.theta2])
+		# Normalise state
+		self.state[0:2] = self.state[0:2] / np.array([2*np.pi, 2*np.pi])
 		#time.sleep(0.001)
 
 	def check_target(self):
@@ -211,27 +213,31 @@ class PendulumGame():
 			# hit
 			self.canvas.delete(self.target)
 			self.create_target()
-			self.state[2:4] = torch.from_numpy(self.target_position).float()
+			self.state[2:4] = self.target_position
+			# Normalise state
+			self.state[2:4] = self.state[2:4] / np.array([2*np.pi, l1+l2])
 			reward = 100
 			self.hits += 1
+			is_terminal = True
 		else:
-			reward = 1/(distance_between_centers - max_distance)
+			#reward = 1/(distance_between_centers - max_distance)
+			reward = -1
+			is_terminal = False
 		#print(reward)
-		return reward
+		return reward, is_terminal
 
 	def game_step(self, omega1, omega2):
 		self.move_arm(omega1, omega2)
-		reward = self.check_target()
+		reward, is_terminal = self.check_target()
 		self.window.update()
 		next_state = self.state
-		return reward, next_state
+		return reward, next_state, is_terminal
 
 #######################################################################################
 
 class Agent():
 	def __init__(self, game):
 		self.game = game
-		self.state = game.state
 		self.time_step = 0
 		self.experiences = []
 		self.create_neural_network()
@@ -239,104 +245,105 @@ class Agent():
 	def create_neural_network(self):
 		self.model = torch.nn.Sequential(
 			torch.nn.Linear(layer1, layer2),
-			torch.nn.ReLU(),
+			torch.nn.LeakyReLU(),
 			torch.nn.Linear(layer2, layer3),
-			torch.nn.ReLU(),
+			torch.nn.LeakyReLU(),
 			torch.nn.Linear(layer3, layer4),
-			torch.nn.ReLU())
+			torch.nn.Softmax(dim=0))
 
-		self.loss_fn = torch.nn.MSELoss() # mean squared error
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-
+		'''
 		try:
+
 			checkpoint = torch.load('./statedict.pt')
 			self.model.load_state_dict(checkpoint['model_state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-			self.loss = checkpoint['loss']
+			#self.loss.load_state_dict(checkpoint['loss'])
+			print(checkpoint['keyword'])
 			print("Loaded network")
 		except:
+			print("No network to load")
 			pass
+		'''
 		self.model.train()
-
-	def get_q_values(self, state, no_grad=False):
-		# Normalize state
-		state = state/torch.Tensor([2*np.pi, 2*np.pi, window_width, window_height])
-		#print(state)
-		if no_grad == True:
-			with torch.no_grad():
-				q_values = self.model(state)
-		else:
-			q_values = self.model(state)
-		return q_values
-
-	def softmax(self, q_values):
-		q_values = q_values.detach().numpy()
-		max_q_value = np.max(q_values)
-		numerator = np.exp((q_values-max_q_value)/temperature)
-		denominator = np.sum(np.exp((q_values-max_q_value)/temperature))
-		probabilities = numerator/denominator
-		omega_index = np.random.choice(np.arange(0,len(actions)),p=probabilities)
-		return omega_index
 
 	def uniform_random(self, q_values):
 		return np.random.choice(np.arange(len(actions)))
 
+	def discount_rewards(self, rewards):
+		discounted_return = torch.pow(gamma, torch.arange(len(rewards)).float())*rewards
+		discounted_return /= discounted_return.max()
+		return discounted_return
+
+	def loss_function(self, probabilities, discounted_return):
+		loss = -1*torch.sum(discounted_return*torch.log(probabilities))
+		return loss
+
 	def play(self):
-		while True:
-			# Get next state and reward from game
-			experience = (self.state,)
-			q_values = self.get_q_values(self.state)
-			omega_index = self.softmax(q_values)
-			experience += (omega_index,)
-			omega1 = actions[omega_index][0]
-			omega2 = actions[omega_index][1]
-			reward, next_state = self.game.game_step(omega1, omega2)
-
-			# Save experience
-			experience += (reward,)
-			experience += (next_state,)
-			if len(self.experiences) >= memory_size:
-				self.experiences.pop()
-			self.experiences.append(experience)
-			# Experience Replay
-			if len(self.experiences) >= batch_size:
-				minibatch = random.sample(self.experiences, batch_size)
-				state1_batch = torch.stack([s1 for (s1,a,r,s2) in minibatch])
-				action_index_batch = torch.Tensor([a for (s1,a,r,s2) in minibatch])
-				state2_batch = torch.stack([s2 for (s1,a,r,s2) in minibatch])
-				reward_batch = torch.Tensor([r for (s1,a,r,s2) in minibatch])
-				Q1 = self.model(state1_batch)
-				with torch.no_grad():
-					Q2 = self.model(state2_batch)
-
-				target = reward_batch + gamma*(torch.max(Q2,dim=1)[0])
-				updated_Q1 = Q1.clone()
-				updated_Q1[:,action_index_batch.long()] = target
-				self.loss = self.loss_fn(Q1, updated_Q1)
-				self.optimizer.zero_grad()
-				self.loss.backward()
-				self.optimizer.step()
-
-			self.state = next_state
+		is_terminal = False
+		self.experiences = np.zeros(10)
+		while is_terminal == False:
+			# Choose action
+			state1 = self.game.state
+			#print(f"State: {state1}")
+			experience = np.zeros(10)
+			experience[0:4] = state1
+			probabilities = self.model(torch.from_numpy(state1).float())
+			action_index = np.random.choice(np.arange(len(actions)), p=probabilities.data.numpy())
+			#action_index = np.random.choice(np.arange(len(actions)))
+			action = actions[action_index]
+			experience[4] = action_index
+			omega1 = action[0]
+			omega2 = action[1]
+			# Observe next state and reward
+			reward, state2, is_terminal = self.game.game_step(omega1, omega2)
+			experience[5] = reward
+			experience[6:] = state2
+			if len(self.experiences) >= maximum_batch_size:
+				self.experiences = np.delete(self.experiences, 1, 0)
+			self.experiences = np.vstack((self.experiences,experience))
 			self.time_step += 1
+		
+		# Add episode length to hit_time_steps
+		hit_time_steps.append(self.time_step)
 
-			if reward == 100:
-				results_time_steps_with_hits.append(self.time_step)
-				text_file = open("Output.txt", "w")
-				text_file.write(f"{results_time_steps_with_hits}")
-				text_file.close()
+		# Remove zero row from experiences
+		self.experiences = self.experiences[1:]
+		# Change experiences to torch Tensor
+		self.experiences = torch.from_numpy(self.experiences).float()
 
-				print("Saved!")
-				# Save learned weights and biases
-				torch.save({
-	        		'model_state_dict': self.model.state_dict(),
-	        		'optimizer_state_dict': self.optimizer.state_dict(),
-	        		'loss': self.loss}, 'statedict.pt')
+		reward_batch = self.experiences[:,5]
+		discounted_return = self.discount_rewards(reward_batch)
+		state_batch = self.experiences[:,0:4]
+		action_index_batch = self.experiences[:,4]
+		predictions_batch = self.model(state_batch)
+		# Only include probabilities of the actions taken
+		predictions_batch_actions_taken = predictions_batch.gather(dim=1,index=action_index_batch.long().view(-1,1)).squeeze()
+		loss = self.loss_function(predictions_batch_actions_taken, discounted_return)
+		self.optimizer.zero_grad()
+		loss.backward()
+		self.optimizer.step()
+
+		# Save learned weights and biases
+		try:
+			torch.save({
+				'model_state_dict': self.model.state_dict(),
+				'optimizer_state_dict': self.optimizer.state_dict(),
+				'loss': loss,
+				'keyword': 'thisthing2'},
+				'statedict.pt')
+			print("Saved!")	
+		except:
+			pass
 
 #######################################################################################
 
 if __name__ == '__main__':
 	game = PendulumGame()
 	agent = Agent(game)
-	agent.play()
+	for session in range(training_sessions):
+		agent.play()
+		print(len(agent.experiences))
+	print(hit_time_steps)
+	print(np.average(np.array(hit_time_steps)))
 	game.window.mainloop()
