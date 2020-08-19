@@ -4,24 +4,18 @@ import time
 import torch
 from tqdm import tqdm
 
-#####################################################
-
-# Used resources
-
-# Inspiration for how to solve Euler Lagrange https://scipython.com/blog/the-double-pendulum/
-# Tutorial for scipy's odeint https://www.youtube.com/watch?v=VV3BnroVjZo
-# Book: Deep Reinforcement Learning in Action
-
-#####################################################
+#######################################################################################
 
 # Set parameters
 l1 = 0.5
 l2 = 0.5
-bob1_radius = 0.05
-bob2_radius = 0.05
-target_radius = 0.1
+bob1_radius = 0.1
+bob2_radius = 0.1
+target_radius = 0.2
+ww = 600
+wh = 600
+linewidth = 2
 
-# Set neural network parameters
 speed = 0.05
 actions = np.array([[-speed,-speed],
 					[-speed,0],
@@ -33,12 +27,6 @@ actions = np.array([[-speed,-speed],
 					[speed,0],
 					[speed,speed]])
 
-training_sessions = 500
-maximum_batch_size = 3000
-
-hit_time_steps = []
-losses = []
-
 #######################################################################################
 
 def generate_random_angle():
@@ -47,8 +35,8 @@ def generate_random_angle():
 
 # Get the x and y coordinate of the end of the limb
 def get_limb_end(x0, y0, length, angle):
-	x1 = x0 + length*np.sin(angle)
-	y1 = y0 + length*np.cos(angle)
+	x1 = x0 + length*np.cos(angle)
+	y1 = y0 + length*np.sin(angle)
 	return x1, y1
 
 def generate_target_position():
@@ -67,8 +55,7 @@ def generate_initial_state():
 
 class RobotArmGame():
 	def __init__(self):
-		self.state = generate_initial_state()
-		self.is_terminal = False
+		pass
 
 	def reset(self):
 		self.state = generate_initial_state()
@@ -114,13 +101,10 @@ class RobotArmGame():
 
 		if distance_between_centers < max_distance:
 			# hit
-			target_x, target_y = generate_target_position()
-			self.state[2] = target_x
-			self.state[3] = target_y
 			reward = 100
 			self.is_terminal = True
 		else:
-			reward = -1
+			reward = -distance_between_centers
 		#print(reward)
 		return reward
 
