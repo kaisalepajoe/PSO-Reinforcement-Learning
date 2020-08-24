@@ -1,2 +1,2 @@
-# Double-Pendulum-DRL
-Applying Deep Reinforcement Learning (DLR) to a double pendulum system
+# Robot Arm Reinforcement Learning
+Applying Deep Reinforcement Learning (DLR) to a simulated robot arm.
