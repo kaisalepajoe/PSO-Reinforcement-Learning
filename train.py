@@ -488,13 +488,18 @@ class Swarm(Experiment):
 	def get_parameters(self):
 		'''
 		Returns optimal parameters and lowest value found.
+
 		If get_parameters_from is set to 'g-values' in the fn_info dictionary,
 		then the optimal parameters are chosen from the global values. The g-values
 		of all Particles in the Swarm are inspected and the lowest value is chosen.
+
 		If get_parameters_from is set to 'average p-values', then the
 		optimal parameters are chosen from the best visited positions of each particle.
 		The p-values of all Particles in the Swarm are inspected, and the average of 
 		positions and values are returned.
+
+		If get_parameters_from is set to 'average final pos' then the
+		optimal parameters are chosen from the final positions of the particles.
 		Parameters
 		----------
 		None
@@ -515,6 +520,11 @@ class Swarm(Experiment):
 			for i,particle in enumerate(self.particles):
 				final_p[i,:] = particle.p 
 			result = np.average(final_p, axis=0)
+		if self.get_parameters_from == "average final pos":
+			final_pos = np.inf*np.ones((self.N, self.dim+1))
+			for i,particle in enumerate(self.particles):
+				final_pos[i,:self.dim] = particle.pos
+			result = np.average(final_pos, axis=0)
 		return result
 
 	def run_algorithm(self):
@@ -851,7 +861,7 @@ def evaluation_function(vector):
 	score = 0
 	t = 0
 	while not done:
-		if t < 6000:
+		if t < 4000:
 			params = unpack_params(vector)
 			probs = model(state, params)
 			action = torch.distributions.Categorical(probs=probs).sample()
@@ -876,7 +886,7 @@ fn_info = {
 	"special_constraints":False, # N,t,r are related through the number of evaluations
 	"constraints_function":None,
 	"constraints_extra_arguments":[],
-	"show_animation":False,
+	"show_animation":True,
 	"disable_progress_bar":False,
 	"disable_printing":True,
 	"get_parameters_from":"average p-values"
@@ -884,7 +894,7 @@ fn_info = {
 
 constants = {'phi': 2.4, 'N': 9, 'k': 3, 'time_steps': 100, 'repetitions': 3}
 
-def train(N=63, time_steps=100, repetitions=1):
+def train(N=15, time_steps=100, repetitions=1):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -905,6 +915,8 @@ def train(N=63, time_steps=100, repetitions=1):
 	constants['time_steps'] = time_steps
 	constants['repetitions'] = repetitions
 	experiment = Experiment(constants=constants, fn_info=fn_info)
+	print("Getting parameters from "+fn_info["get_parameters_from"])
+
 	best_position, best_f, _ = experiment.run()
 	best_parameters = best_position
 	value = best_f
