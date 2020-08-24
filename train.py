@@ -26,15 +26,12 @@ import torch
 def determine_error(found_value, minimum_value=0):
 	'''
 	Returns the difference between two values.
-
 	Parameters
 	----------
 	found_value : number
 	A value found in the experiment.
-
 	minimum_value : number
 	The known value.
-
 	Returns
 	-------
 	error : number
@@ -46,24 +43,19 @@ def determine_error(found_value, minimum_value=0):
 def n_evaluations(N, time_steps, repetitions):
 	'''
 	Returns the number of evaluations of an experiment.
-
 	Returns the number of evaluations for a given number of particles,
 	time_steps, and repetitions.
-
 	If given an array, does calculations on rows and returns the number of
 	evaluations as an array.
-
 	Parameters
 	----------
 	N : number or np.ndarray
 	The number of particles in the swarm.
-
 	time_steps : number or np.ndarray
 	The number of time steps in each swarm evolution.
 	
 	repetitions : number or np.ndarray
 	The number of times swarm evolutions are repeated.
-
 	Returns
 	-------
 	n_evaluations : number or np.ndarray
@@ -81,7 +73,6 @@ class Experiment:
 	'''
 	This class sets the parameters from the constants and fn_info dictionaries
 	as attributes of the Class. The class is inherited by both Particles and Swarms.
-
 	The main method of this script is 'run' from the Experiment class.
 	Create an experiment object: experiment = ob.Experiment()
 	Run the PSO algorithm: experiment.run()
@@ -89,17 +80,14 @@ class Experiment:
 	def __init__(self, constants=None, fn_info=None):
 		'''
 		This function sets the parameters from the dictionaries 'constants' and 'fn_info'
-
 		'constants' contains: phi, k, N, time_steps, repetitions
 		'fn_info' contains: fn_name, optimal_f, dim, xmin, xmax, param_is_integer,
 		special_constraints, constraints_function, constraints_extra_arguments,
 		show_animation, disable_progress_bar, get_parameters_from.
-
 		Parameters
 		----------
 		constants : dict
 		The dictionary containing the following hyperparameters of the PSO algorithm.
-
 			phi : number
 			Phi sets the two confidence parameters c1 and cmax as described in the PSO book.
 			
@@ -149,7 +137,6 @@ class Experiment:
 			The first element of the list must be a boolean that indicates if initial positions must be
 			generated. This boolean should initially be set to True, so the constraint function knows to 
 			generate initial positions, not next positions.
-
 			show_animation : bool
 			An animation of the swarm is shown at the end of the Experiment.run function if this argument
 			is set to True. 
@@ -161,7 +148,6 @@ class Experiment:
 			This string is either "g-values" or "average p-values". Used in the get_parameters method of
 			the Swarm class. See the doc of this method for more information.
 			If not sure, set to "g-values".
-
 		Returns
 		-------
 		Nothing
@@ -208,12 +194,10 @@ class Experiment:
 		Returns dictionary of current constants if argument 'constants_dictionary' is not given.
 		If the argument 'constants_dictionary' is given, then sets the constants to the values
 		found in 'constants_dictionary', and returns 'constants_dictionary'.
-
 		Parameters
 		----------
 		constants_dictionary : dict
 .
-
 		Returns
 		-------
 		constants : dict
@@ -239,12 +223,10 @@ class Experiment:
 		Returns dictionary of current fn_info if argument 'fn_info_dictionary' is not given.
 		If the dictionary is given, then sets the constants to the values
 		found in the dictionary, and returns the same dictionary.
-
 		Parameters
 		----------
 		fn_info_dictionary : dict
 		The dictionary containing the constants phi, k, N, time_steps, repetitions.
-
 		Returns
 		-------
 		fn_info : dict
@@ -259,6 +241,7 @@ class Experiment:
 				"constraints_extra_arguments":self.constraints_extra_arguments,
 				"show_animation":self.show_animation,
 				"disable_progress_bar":self.disable_progress_bar,
+				"disable_printing":self.disable_printing,
 				"get_parameters_from": self.get_parameters_from}
 			return fn_info
 		elif type(fn_info_dictionary) == dict:
@@ -270,16 +253,13 @@ class Experiment:
 	def n_evaluations(self):
 		'''
 		Returns the number of evaluations.
-
 		This function uses the n_evaluations helper function to calculate the
 		number of evaluations, but sets the parameters N, time_steps, repetitions
 		automatically. It is useful to get the number of evaluations of an experiment
 		object quickly.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		n_evaluations : number
@@ -293,16 +273,13 @@ class Experiment:
 		Runs the experiment from beginning to end. 
 		Returns the best found position, best value and error,
 		and also assigns these to the Experiment object as attributes.
-
 		If show_animation is set to True, the swarm will be animated.
 		To see the animation again, use the command experiment.swarm.animate_swarm()
-
 		Parameters
 		----------
 		allowed_n_evaluations : number
 		The maximum number of evaluations allowed for this run. The true number of 
 		evaluations bight be a bit higher or lower than this value.
-
 		Returns
 		-------
 		best_position : np.ndarray
@@ -337,7 +314,7 @@ class Experiment:
 		self.best_f = self.swarm.best_f
 		self.error = self.swarm.error
 
-		if disable_printing == False:
+		if self.disable_printing == False:
 			print(f"{true_n_evaluations} evaluations made.")
 			print(f"The best position is {repr(self.best_position.tolist())}.")
 			print(f"The value at this position is {self.best_f}")
@@ -361,15 +338,12 @@ class Swarm(Experiment):
 	def random_initial_positions(self):
 		'''
 		Returns an array of random initial positions.
-
 		Returns an array of random initial positions for each particle
 		in a swarm. Each position is within the search space given by xmin, xmax,
 		and any special constraints in the fn_info dictionary.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		initial_positions : np.ndarray
@@ -396,11 +370,9 @@ class Swarm(Experiment):
 	def random_initial_velocities(self):
 		'''
 		Returns an array of random initial velocities for the Particles.
-
 		Parameters 
 		----------
 		None
-
 		Returns
 		-------
 		initial_velocities : np.ndarray
@@ -414,17 +386,14 @@ class Swarm(Experiment):
 	def create_particles(self, initial_positions, initial_velocities):
 		'''
 		Creates a list of Particle objects for the swarm.
-
 		Parameters
 		----------
 		initial_positions : array
 		An array of initial positions for all N particles
 		with shape (number of particles, number of dimensions)
-
 		initial_velocities : array
 		An array of initial velocities for all N particles
 		with shape (number of particles, number of dimensions)
-
 		Returns
 		-------
 		None
@@ -457,11 +426,9 @@ class Swarm(Experiment):
 		'''
 		Chooses k informants randomly for each Particle of the Swarm.
 		Sets a list of these informant Particles as attributes for each Particle.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -473,11 +440,9 @@ class Swarm(Experiment):
 		'''
 		Distributes Particles in the search space and chooses informants for each particle.
 		Also initializes an array of positions for animating the Swarm.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -500,11 +465,9 @@ class Swarm(Experiment):
 		'''
 		Updates positions of Particles for all time steps. Populates the positions array
 		for animating the Swarm. Also shows a progress bar.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -525,20 +488,16 @@ class Swarm(Experiment):
 	def get_parameters(self):
 		'''
 		Returns optimal parameters and lowest value found.
-
 		If get_parameters_from is set to 'g-values' in the fn_info dictionary,
 		then the optimal parameters are chosen from the global values. The g-values
 		of all Particles in the Swarm are inspected and the lowest value is chosen.
-
 		If get_parameters_from is set to 'average p-values', then the
 		optimal parameters are chosen from the best visited positions of each particle.
 		The p-values of all Particles in the Swarm are inspected, and the average of 
 		positions and values are returned.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		result : np.ndarray
@@ -561,27 +520,20 @@ class Swarm(Experiment):
 	def run_algorithm(self):
 		'''
 		Evolves the swarm through time for the required number of repetitions.
-
 		Assigns the best found position, value, and error to the Swarm, and
 		returns these as a tuple.
-
 		Parameters
 		---------
 		None
-
 		Returns
 		-------
 		(best_position, best_f, error)
-
 		best_position : np.ndarray
 		An array of the best parameters found.
-
 		best_f : float
 		The value of the function at this position.
-
 		error : float
 		The difference between the best_f and optimal_f given in the fn_info dictionary.
-
 		'''
 		results = np.inf*np.ones((self.repetitions, self.dim+1))
 		# all_positions contains all the visited positions for each repetition
@@ -608,13 +560,10 @@ class Swarm(Experiment):
 	def animate_swarm(self):
 		'''
 		Plots an animation of the best repetition of evolving the swarm.
-
 		Only the first 2 dimensions are plotted for a higher-dimensional problem.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -636,22 +585,16 @@ class Swarm(Experiment):
 	def update_frames(self, j, *fargs):
 		'''
 		Updates the frames of the animation.
-
 		Parameters
 		----------
 		j : int
 		Frame number.
-
 		*fargs contains scat, all_positions, and best_value_index
-
 		scat : scatter plot
-
 		all_positions : np.ndarray
 		An array of all positions visited by the Swarm.
-
 		best_value_index : int
 		The index indicating the best performing repetition.
-
 		Returns
 		-------
 		None
@@ -681,19 +624,15 @@ class Particle(Experiment):
 		----------
 		pos : array
 		An array containing an initial position for each dimension.
-
 		vel : array
 		An array containing an initial velocity for each dimension.
-
 		p : array
 		An array containing the best found position and value that the particle
 		has visited. The initial state has p equal to the initial position and its
 		value as the particle has not visited any other positions yet.
-
 		Returns
 		-------
 		None
-
 		'''
 		self.pos = pos
 		self.vel = vel
@@ -711,14 +650,11 @@ class Particle(Experiment):
 	def communicate(self):
 		'''
 		Receives g-values from informants and updates the Particle's g-value accordingly.
-
 		If the best received g-value is smaller than the Particle's g-value, then the
 		particles g-value is set to the received g-value.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -738,18 +674,15 @@ class Particle(Experiment):
 	def random_confidence(self):
 		'''
 		Randomly assigns confidence parameters c2 and c3 in the interval [0, cmax)
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		(c2, c3)
 		c2 : np.ndarray
 		The confidence in the Particle's p-value. The array has the same
 		dimensions as the problem.
-
 		c3 : np.ndarray
 		The confidence in the particle's g-value. The array has the same
 		dimensions as the problem.
@@ -766,15 +699,12 @@ class Particle(Experiment):
 	def update_p(self, value):
 		'''
 		Compares the new position and the old p-value, and updates p accordingly.
-
 		If the new position is better than the old p-value, then the p-value is set
 		to the new position and that position's value.
-
 		Parameters
 		----------
 		value : number
 		The value of the position that is compared to p
-
 		Returns
 		-------
 		None
@@ -789,12 +719,10 @@ class Particle(Experiment):
 		Updates the particle's g-value if the new position is better than the
 		previously known g-value. Finishes by communicating with informants
 		and updating the g-value again.
-
 		Parameters
 		----------
 		value : number
 		The value of the position that is compared to g
-
 		Returns
 		-------
 		None
@@ -808,14 +736,11 @@ class Particle(Experiment):
 		'''
 		Calculates the velocity of the Particle according to the 
 		update equation from the PSO book.
-
 		Since this is PSO(0), c1 is constant, and c2,c2 are chosen
 		randomly from a rectangular probability distribution.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -836,11 +761,9 @@ class Particle(Experiment):
 		'''
 		Uses the calculated velocity to set the next position for a Particle
 		while taking into account any constraints on the search space.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -861,12 +784,10 @@ class Particle(Experiment):
 		'''
 		Checks whether a position is inside the allowed search space given by xmin and xmax.
 		Returns True or False.
-
 		Parameters
 		----------
 		possible_pos : np.ndarray
 		A possible position of the particle that may or may not be within the search area.
-
 		Returns
 		-------
 		is_allowed : bool
@@ -886,11 +807,9 @@ class Particle(Experiment):
 		'''
 		Moves a Particle from one position to another while taking into account
 		any constraints.
-
 		Parameters
 		----------
 		None
-
 		Returns
 		-------
 		None
@@ -957,7 +876,7 @@ fn_info = {
 	"special_constraints":False, # N,t,r are related through the number of evaluations
 	"constraints_function":None,
 	"constraints_extra_arguments":[],
-	"show_animation":True,
+	"show_animation":False,
 	"disable_progress_bar":False,
 	"disable_printing":True,
 	"get_parameters_from":"average p-values"
@@ -965,18 +884,16 @@ fn_info = {
 
 constants = {'phi': 2.4, 'N': 9, 'k': 3, 'time_steps': 100, 'repetitions': 3}
 
-def train(N=9, time_steps=100, repetitions=3):
+def train(N=63, time_steps=100, repetitions=1):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
-
 	Inputs
 	------
 	N : int
 	Number of particles
 	time_steps : int
 	repetitions : int
-
 	Returns
 	-------
 	(best_position, best_f)
@@ -989,4 +906,6 @@ def train(N=9, time_steps=100, repetitions=3):
 	constants['repetitions'] = repetitions
 	experiment = Experiment(constants=constants, fn_info=fn_info)
 	best_position, best_f, _ = experiment.run()
-	return best_position, best_f
+	best_parameters = best_position
+	value = best_f
+	return best_parameters, value
