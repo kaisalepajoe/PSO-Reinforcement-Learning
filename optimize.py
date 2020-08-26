@@ -5,7 +5,7 @@ from evaluate import get_random_scores
 import matplotlib.pyplot as plt
 import numpy as np
 
-nodes = np.array([4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
+nodes = np.array([4,12,20,30,40,70,100])
 params_times = np.zeros(len(nodes))
 random_times = np.zeros(len(nodes))
 
@@ -18,6 +18,7 @@ for i,node in enumerate(nodes):
 
 plt.plot(nodes, params_times, label='trained')
 plt.plot(nodes, random_times, label='random')
+plt.xlabel('Number of hidden nodes')
 plt.legend()
 plt.show()
 
