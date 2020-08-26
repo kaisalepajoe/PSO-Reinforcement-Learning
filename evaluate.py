@@ -14,8 +14,10 @@ def model(x, unpacked_params):
 	y = torch.log_softmax(y,dim=0)
 	return y
 
-def unpack_params(params, layers=[(50,4), (9,50)]):
+def unpack_params(params):
+	hidden_layer = int((len(params) - 9)/14)
 	params = torch.from_numpy(params).float()
+	layers = [(hidden_layer,4), (9,hidden_layer)]
 	unpacked_params = []
 	e = 0
 	for i,l in enumerate(layers):
@@ -36,7 +38,7 @@ def get_scores(vector, iterations=1000):
 		score = 0
 		t = 0
 		while not done:
-			if t < 6000:
+			if t < 4000:
 
 				probs = model(state, params)
 				action = torch.distributions.Categorical(probs=probs).sample()
@@ -50,6 +52,32 @@ def get_scores(vector, iterations=1000):
 	scores = np.array(scores)
 	return scores
 
+def get_random_scores(vector_length, iterations=1000):
+	env = RobotArmGame()
+	scores = []
+
+	for iteration in tqdm(range(iterations)):
+		vector = 20*np.random.random(vector_length) - 10
+		params = unpack_params(vector)
+		done = False
+		state = torch.from_numpy(env.reset()).float()
+		score = 0
+		t = 0
+		while not done:
+			if t < 4000:
+
+				probs = model(state, params)
+				action = torch.distributions.Categorical(probs=probs).sample()
+				state_, reward, done, info = env.step(action.item())
+				state = torch.from_numpy(state_).float()
+				t += 1
+			else:
+				done = True
+		score = t
+		scores.append(score)
+	scores = np.array(scores)
+	return scores	
+
 def compare_to_random(vector, iterations=1000):
 	'''
 	Compares the found NN weights and biases vector to a random one
@@ -57,14 +85,13 @@ def compare_to_random(vector, iterations=1000):
 	Input
 	-----
 	vector : np.ndarray
-	A vector of length 709 that contains the weights and biases of the neural network
+	A vector of length 177 that contains the weights and biases of the neural network
 
 	iterations : int (default 1000)
 	The number of times to run the game before plotting results
 	'''
-	optimal_scores = get_scores(vector)
-	random_vector = 20*np.random.random(709) - 10
-	random_scores = get_scores(random_vector, iterations)
+	optimal_scores = get_scores(vector, iterations)
+	random_scores = get_random_scores(len(vector), iterations)
 	optimal_points = []
 	random_points = []
 	for i in range(len(optimal_scores)):

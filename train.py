@@ -842,8 +842,9 @@ def model(x, unpacked_params):
 	y = torch.log_softmax(y,dim=0)
 	return y
 
-def unpack_params(params, layers=[(50,4), (9,50)]):
+def unpack_params(params):
 	params = torch.from_numpy(params).float()
+	layers = [(hidden_nodes,4), (9,hidden_nodes)]
 	unpacked_params = []
 	e = 0
 	for i,l in enumerate(layers):
@@ -877,24 +878,8 @@ def evaluation_function(vector):
 
 # Training the ANN for the robot arm problem
 
-fn_info = {
-	"fn_name":'evaluation_function',
-	"optimal_f":0, # We want to reduce the time to 0
-	"dim":709,
-	"xmin":np.ones(709)*-10, "xmax":np.ones(709)*10,
-	"param_is_integer":np.zeros(709),
-	"special_constraints":False, # N,t,r are related through the number of evaluations
-	"constraints_function":None,
-	"constraints_extra_arguments":[],
-	"show_animation":True,
-	"disable_progress_bar":False,
-	"disable_printing":True,
-	"get_parameters_from":"average p-values"
-	}
-
-constants = {'phi': 2.4, 'N': 9, 'k': 3, 'time_steps': 100, 'repetitions': 3}
-
-def train(N=15, time_steps=100, repetitions=1):
+def train(N=9, time_steps=100, repetitions=1,\
+	nodes=12, search_space=5, show_animation=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -908,12 +893,32 @@ def train(N=15, time_steps=100, repetitions=1):
 	-------
 	(best_position, best_f)
 	best_position : np.ndarray
-	A vector of 709 elements for the neural network
+	A vector of 177 elements for the neural network
 	best_f : the resulting time with that configuration
 	'''
-	constants['N'] = N
-	constants['time_steps'] = time_steps
-	constants['repetitions'] = repetitions
+
+	global hidden_nodes
+	hidden_nodes = nodes
+
+	vector_length = 4*hidden_nodes + 9*hidden_nodes + hidden_nodes + 9
+
+	fn_info = {
+	"fn_name":'evaluation_function',
+	"optimal_f":0, # We want to reduce the time to 0
+	"dim":vector_length,
+	"xmin":np.ones(vector_length)*-search_space, "xmax":np.ones(vector_length)*search_space,
+	"param_is_integer":np.zeros(vector_length),
+	"special_constraints":False, # N,t,r are related through the number of evaluations
+	"constraints_function":None,
+	"constraints_extra_arguments":[],
+	"show_animation":show_animation,
+	"disable_progress_bar":False,
+	"disable_printing":True,
+	"get_parameters_from":"average final pos"
+	}
+
+	constants = {'phi': 2.4, 'N': N, 'k': 3, 'time_steps': time_steps, 'repetitions': repetitions}
+
 	experiment = Experiment(constants=constants, fn_info=fn_info)
 	print("Getting parameters from "+fn_info["get_parameters_from"])
 
