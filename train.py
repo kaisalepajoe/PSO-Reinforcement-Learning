@@ -875,8 +875,8 @@ def evaluation_function(vector):
 
 # Training the ANN for the robot arm problem
 
-def train(N=9, time_steps=100, repetitions=1,\
-	nodes=12, search_space=5, show_animation=True):
+def train(N=40, time_steps=200, repetitions=1,\
+	nodes=13, search_space=10, show_animation=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -917,7 +917,7 @@ def train(N=9, time_steps=100, repetitions=1,\
 	constants = {'phi': 2.4, 'N': N, 'k': 3, 'time_steps': time_steps, 'repetitions': repetitions}
 
 	experiment = Experiment(constants=constants, fn_info=fn_info)
-	print("Getting parameters from "+fn_info["get_parameters_from"])
+	#print("Getting parameters from "+fn_info["get_parameters_from"])
 
 	best_position, best_f, _ = experiment.run()
 	best_parameters = best_position
