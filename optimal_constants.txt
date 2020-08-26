@@ -1,0 +1,3 @@
+{'phi': 2.4, 'N': 9, 'k': 3, 'time_steps': 18, 'repetitions': 3}
+
+# These constants are optimized for number of evaluations = 500.

@@ -67,6 +67,26 @@ def n_evaluations(N, time_steps, repetitions):
 	else:
 		return math.ceil(n_evaluations)
 
+def read_dictionary_from_file(filename='optimal_constants.txt'):
+	"""
+	Read and return a dictionary from a txt file.
+
+	Parameters
+	----------
+	filename : str
+	The name of the file to be read.
+	This file must be located in the 'optimusbeez' directory.
+
+	Returns
+	-------
+	dictionary : dict
+
+	"""
+	file = open(filename, 'r')
+	data = file.read()
+	dictionary = eval(data)
+	return dictionary
+
 ###################################################################
 
 class Experiment:
@@ -650,7 +670,7 @@ class Particle(Experiment):
 		# format: np array of shape (1, 3) - x, y, value
 		self.p = p
 
-		# Best found position and value by informants or itself
+		# Best p of informants
 		# format: np array of shape (1, 3) - x, y, value
 		self.g = p
 
@@ -660,8 +680,6 @@ class Particle(Experiment):
 	def communicate(self):
 		'''
 		Receives g-values from informants and updates the Particle's g-value accordingly.
-		If the best received g-value is smaller than the Particle's g-value, then the
-		particles g-value is set to the received g-value.
 		Parameters
 		----------
 		None
@@ -670,16 +688,16 @@ class Particle(Experiment):
 		None
 		'''
 
-		# Receive best positions with values from informants
+		# g - best "previous best" found by informants
+		# Receive p-s from informants
 		received = np.zeros((self.k, self.dim+1))
 		for i, informant in enumerate(self.informants):
-			received[i, :] = informant.g
-		# Find best g from communicated values
+			received[i, :] = informant.p
+		# Find best p from communicated values
 		i = np.argmin(received[:,self.dim])
-		best_received_g = received[i]
+		best_received_p = received[i]
 		# Set g to LOWEST value
-		if best_received_g[-1] < self.g[-1]:
-			self.g = best_received_g
+		self.g = best_received_p
 
 	def random_confidence(self):
 		'''
@@ -723,24 +741,6 @@ class Particle(Experiment):
 		if value < self.p[self.dim]:
 			self.p[self.dim] = value
 			self.p[0:self.dim] = self.pos
-
-	def update_g(self, value):
-		'''
-		Updates the particle's g-value if the new position is better than the
-		previously known g-value. Finishes by communicating with informants
-		and updating the g-value again.
-		Parameters
-		----------
-		value : number
-		The value of the position that is compared to g
-		Returns
-		-------
-		None
-		'''
-		if value < self.g[self.dim]:
-			self.g[self.dim] = value
-			self.g[0:self.dim] = self.pos
-		self.communicate()
 
 	def find_vel(self):
 		'''
@@ -826,7 +826,7 @@ class Particle(Experiment):
 		'''
 		value = eval(self.fn_name)(self.pos)
 		self.update_p(value)
-		self.update_g(value)
+		#self.update_g(value)
 		self.find_vel()
 		self.set_pos()
 
@@ -878,7 +878,7 @@ def evaluation_function(vector):
 
 # Training the ANN for the robot arm problem
 
-def train(N=9, time_steps=100, repetitions=1,\
+def train(N=25, time_steps=100, repetitions=1,\
 	nodes=12, search_space=5, show_animation=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
