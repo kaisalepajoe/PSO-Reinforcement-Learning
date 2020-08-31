@@ -11,7 +11,7 @@ l1 = 0.5
 l2 = 0.5
 bob1_radius = 0.1
 bob2_radius = 0.1
-target_radius = 0.1
+target_radius = 0.05
 ww = 600
 wh = 600
 linewidth = 2
@@ -48,7 +48,8 @@ def generate_target_position():
 def generate_initial_state():
 	theta1 = generate_random_angle()
 	theta2 = generate_random_angle()
-	target_x, target_y = generate_target_position()
+	#target_x, target_y = generate_target_position()
+	target_x, target_y = 0.75, 0.75
 	return np.array([theta1, theta2, target_x, target_y])
 
 #######################################################################################

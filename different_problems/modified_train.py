@@ -16,8 +16,8 @@ import pkgutil
 import io
 import sys
 from tqdm import tqdm
-from environment import RobotArmGame
 import torch
+import gym
 
 ###################################################################
 
@@ -474,13 +474,19 @@ class Swarm(Experiment):
 		'''
 
 		# Evolve swarm for all time steps
+		global avg_times
+		avg_times = []
 		for time_step in tqdm(range(self.time_steps),
 			desc=f"Repetition {self.current_repetition}/{self.repetitions}: Evolving swarm",
 			disable=self.disable_progress_bar):
+			global particle_times
+			particle_times = []
 			for i, particle in enumerate(self.particles):
 				particle.step()
 				# Update positions for animation
 				self.positions[time_step,i,:] = particle.pos
+			particle_times = np.array(particle_times)
+			avg_times.append(np.average(particle_times))
 			# Select informants for next time step
 			self.random_informants()
 
@@ -822,6 +828,7 @@ class Particle(Experiment):
 		None
 		'''
 		value = eval(self.fn_name)(self.pos)
+		particle_times.append(value)
 		self.update_p(value)
 		self.update_g(value)
 		self.find_vel()
@@ -841,7 +848,7 @@ def model(x, unpacked_params):
 
 def unpack_params(params):
 	params = torch.from_numpy(params).float()
-	layers = [(hidden_nodes,4), (9,hidden_nodes)]
+	layers = [(hidden_nodes,6), (3,hidden_nodes)]
 	unpacked_params = []
 	e = 0
 	for i,l in enumerate(layers):
@@ -852,23 +859,26 @@ def unpack_params(params):
 		unpacked_params.extend([weights,bias])
 	return unpacked_params
 
-def evaluation_function(vector):
-	env = RobotArmGame()
+def evaluation_function(vector, render=False):
+	env = gym.make('Acrobot-v1')
 	done = False
 	state = torch.from_numpy(env.reset()).float()
-	score = 0
 	t = 0
+	total_reward = 0
 	while not done:
-		if t < 4000:
+		if t < 8000:
 			params = unpack_params(vector)
 			probs = model(state, params)
 			action = torch.distributions.Categorical(probs=probs).sample()
 			state_, reward, done, info = env.step(action.item())
 			state = torch.from_numpy(state_).float()
 			t += 1
+			total_reward += reward
+			if render == True:
+				env.render()
 		else:
 			done = True
-	score = t
+	score = -1*total_reward
 	return score
 
 ###################################################################
@@ -876,7 +886,7 @@ def evaluation_function(vector):
 # Training the ANN for the robot arm problem
 
 def train(N=15, time_steps=200, repetitions=1,\
-	nodes=20, search_space=7, show_animation=False):
+	nodes=13, search_space=10, show_animation=True, render=False, disable_progress_bar=False):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -897,7 +907,7 @@ def train(N=15, time_steps=200, repetitions=1,\
 	global hidden_nodes
 	hidden_nodes = nodes
 
-	vector_length = 4*hidden_nodes + 9*hidden_nodes + hidden_nodes + 9
+	vector_length = 6*hidden_nodes + 3*hidden_nodes + hidden_nodes + 3
 
 	fn_info = {
 	"fn_name":'evaluation_function',
@@ -909,7 +919,7 @@ def train(N=15, time_steps=200, repetitions=1,\
 	"constraints_function":None,
 	"constraints_extra_arguments":[],
 	"show_animation":show_animation,
-	"disable_progress_bar":False,
+	"disable_progress_bar":disable_progress_bar,
 	"disable_printing":True,
 	"get_parameters_from":"average final pos"
 	}
@@ -922,4 +932,8 @@ def train(N=15, time_steps=200, repetitions=1,\
 	best_position, best_f, _ = experiment.run()
 	best_parameters = best_position
 	value = best_f
+	#print(avg_times)
+
+	if render == True:
+		evaluation_function(best_parameters, render=True)
 	return best_parameters, value

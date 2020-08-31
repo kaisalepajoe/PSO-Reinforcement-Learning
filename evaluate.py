@@ -242,7 +242,7 @@ def animate(vector, time_steps=10_000):
 		"l2":0.5,
 		"bob1_radius":0.1,
 		"bob2_radius":0.1,
-		"target_radius":0.2,
+		"target_radius":0.05,
 		"window_width":600,
 		"window_height":600,
 		"line_width":2
