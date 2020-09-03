@@ -299,7 +299,9 @@ class Experiment:
 		
 		# Recalculate the time_steps to achieve this maximum number of evaluations.
 		self.time_steps = math.ceil((allowed_n_evaluations - self.repetitions*self.N)/(self.repetitions*self.N))
-		print("Running algorithm...")
+		
+		if self.disable_printing == False:
+			print("Running algorithm...")
 
 		constants = self.constants()
 		fn_info = self.fn_info()
@@ -403,10 +405,7 @@ class Swarm(Experiment):
 		p_values = np.inf*np.ones((self.N, self.dim+1))
 		for i, pos in enumerate(initial_positions):
 			p_values[i,0:self.dim] = pos		
-			if self.special_constraints == True:
-				value = eval(self.fn_name)(pos)
-			else:
-				value = eval(self.fn_name)(pos)
+			value = eval(self.fn_name)(pos)
 			p_values[i,self.dim] = value
 
 		constants = self.constants()
@@ -474,19 +473,19 @@ class Swarm(Experiment):
 		'''
 
 		# Evolve swarm for all time steps
-		global avg_times
-		avg_times = []
+		global avg_rewards
+		avg_rewards = []
 		for time_step in tqdm(range(self.time_steps),
 			desc=f"Repetition {self.current_repetition}/{self.repetitions}: Evolving swarm",
 			disable=self.disable_progress_bar):
-			global particle_times
-			particle_times = []
+			global particle_rewards
+			particle_rewards = []
 			for i, particle in enumerate(self.particles):
 				particle.step()
 				# Update positions for animation
 				self.positions[time_step,i,:] = particle.pos
-			particle_times = np.array(particle_times)
-			avg_times.append(np.average(particle_times))
+			particle_rewards = np.array(particle_rewards)
+			avg_rewards.append(np.average(particle_rewards))
 			# Select informants for next time step
 			self.random_informants()
 
@@ -828,7 +827,7 @@ class Particle(Experiment):
 		None
 		'''
 		value = eval(self.fn_name)(self.pos)
-		particle_times.append(value)
+		particle_rewards.append(-1*value)
 		self.update_p(value)
 		self.update_g(value)
 		self.find_vel()
@@ -885,8 +884,8 @@ def evaluation_function(vector, render=False):
 
 # Training the ANN for the robot arm problem
 
-def train(N=15, time_steps=200, repetitions=1,\
-	nodes=13, search_space=10, show_animation=True, render=False, disable_progress_bar=False):
+def train(N=9, time_steps=50, repetitions=1,\
+	nodes=80, search_space=10, show_animation=True, render=False, disable_progress_bar=False, plot=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -932,7 +931,12 @@ def train(N=15, time_steps=200, repetitions=1,\
 	best_position, best_f, _ = experiment.run()
 	best_parameters = best_position
 	value = best_f
-	#print(avg_times)
+
+	if plot == True:
+		plt.plot(np.arange(time_steps), avg_rewards)
+		plt.xlabel('Time step')
+		plt.ylabel('Average reward')
+		plt.show()
 
 	if render == True:
 		evaluation_function(best_parameters, render=True)

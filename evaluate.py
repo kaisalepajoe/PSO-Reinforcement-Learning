@@ -1,5 +1,5 @@
 import numpy as np
-from environment import RobotArmGame
+from env2 import RobotArmGame
 import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -15,9 +15,9 @@ def model(x, unpacked_params):
 	return y
 
 def unpack_params(params):
-	hidden_layer = int((len(params) - 9)/14)
+	hidden_layer = int((len(params) - 8)/15)
 	params = torch.from_numpy(params).float()
-	layers = [(hidden_layer,4), (9,hidden_layer)]
+	layers = [(hidden_layer,6), (8,hidden_layer)]
 	unpacked_params = []
 	e = 0
 	for i,l in enumerate(layers):
@@ -52,12 +52,12 @@ def get_scores(vector, iterations=1000):
 	scores = np.array(scores)
 	return scores
 
-def get_random_scores(vector_length, iterations=1000):
+def get_random_scores(vector_length, iterations=1000, search_space = 10):
 	env = RobotArmGame()
 	scores = []
 
 	for iteration in tqdm(range(iterations)):
-		vector = 20*np.random.random(vector_length) - 10
+		vector = 2*search_space*np.random.random(vector_length) - search_space
 		params = unpack_params(vector)
 		done = False
 		state = torch.from_numpy(env.reset()).float()
@@ -135,42 +135,36 @@ def get_corners(x, y, r):
 	y1 = y + r
 	return x0, y0, x1, y1
 
-# Get the x and y coordinate of the end of the limb (tkinter coords)
-def get_limb_end(x0, y0, length, angle):
-	x1 = x0 + length*np.cos(angle)
-	y1 = y0 - length*np.sin(angle)
-	return x1, y1
+def convert_to_tkinter_coords(state, env):
+	# bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y
+	for x in [0,2,4]:
+		state[x] = env.window_width/2*(state[x] + 1)
+	for y in [1,3,5]:
+		state[y] = env.window_height/2*(1 - state[y])
+	return state
 
 # Draw all shapes with initial positions
-def initial_draw(canvas, initial_conditions, drawing_parameters):
-	theta1 = initial_conditions[0]
-	theta2 = initial_conditions[1]
+def initial_draw(canvas, initial_conditions_tk, env):
+	bob1_angle = env.angles[0]
+	bob2_angle = env.angles[1]
+	# Initial conditions with coordinate 0 in centre of window
+	bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y = initial_conditions_tk
 
-	l1 = drawing_parameters["l1"]
-	l2 = drawing_parameters["l2"]
-	bob1_radius = drawing_parameters["bob1_radius"]
-	bob2_radius = drawing_parameters["bob2_radius"]
-	target_radius = drawing_parameters["target_radius"]
-	window_width = drawing_parameters["window_width"]
-	window_height = drawing_parameters["window_height"]
-	x_center = window_width/2
-	y_center = window_height/2
-	line_width = drawing_parameters["line_width"]
+	x_center = env.window_width/2
+	y_center = env.window_height/2
 
 	# Draw the first limb
-	limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1*200, theta1)
-	limb1 = canvas.create_line(x_center, y_center, limb1_x1, limb1_y1, width=line_width)
+	limb1 = canvas.create_line(x_center, y_center, bob1_x, bob1_y, width=env.line_width)
 
 	# Draw the second limb
-	limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2*200, theta2)
-	limb2 = canvas.create_line(limb1_x1, limb1_y1, limb2_x1, limb2_y1, width=line_width)
+	limb2 = canvas.create_line(bob1_x, bob1_y, bob2_x, bob2_y, width=env.line_width)
 
 	# Draw the first bob
-	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius*200)
+	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(bob1_x, bob1_y, env.bob1_radius*200)
 	bob1 = canvas.create_oval(bob1_x0, bob1_y0, bob1_x1, bob1_y1, fill="black")
 
 	# Draw the second bob
-	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius*200)
+	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(bob2_x, bob2_y, env.bob2_radius*200)
 	bob2 = canvas.create_oval(bob2_x0, bob2_y0, bob2_x1, bob2_y1, fill="blue")
 
 	# Draw the centre pivot
@@ -178,7 +172,7 @@ def initial_draw(canvas, initial_conditions, drawing_parameters):
 	cpivot = canvas.create_oval(cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1, fill="black")
 
 	# Draw the target
-	target_x0, target_y0, target_x1, target_y1 = get_corners(initial_conditions[2]*200 + x_center, y_center - initial_conditions[3]*200, target_radius*200)
+	target_x0, target_y0, target_x1, target_y1 = get_corners(target_x, target_y, env.target_radius*200)
 	target = canvas.create_oval(target_x0, target_y0, target_x1, target_y1, fill="red")
 
 	elements = {
@@ -191,40 +185,25 @@ def initial_draw(canvas, initial_conditions, drawing_parameters):
 	return elements
 
 # Move pendulum
-def move(canvas, elements, next_state, drawing_parameters):
-	l1 = drawing_parameters["l1"]
-	l2 = drawing_parameters["l2"]
-	bob1_radius = drawing_parameters["bob1_radius"]
-	bob2_radius = drawing_parameters["bob2_radius"]
-	target_radius = drawing_parameters["target_radius"]
-	window_width = drawing_parameters["window_width"]
-	window_height = drawing_parameters["window_height"]
-	x_center = window_width/2
-	y_center = window_height/2
-	line_width = drawing_parameters["line_width"]
+def move(canvas, elements, next_state_tk, env):
+	x_center = env.window_width/2
+	y_center = env.window_height/2
 
-	theta1 = next_state[0]
-	theta2 = next_state[1]
-	target_x = next_state[2]
-	target_y = next_state[3]
+	bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y = next_state_tk
 
-	limb1_x1, limb1_y1 = get_limb_end(x_center, y_center, l1*200, theta1)
-	limb2_x1, limb2_y1 = get_limb_end(limb1_x1, limb1_y1, l2*200, theta2)
-	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(limb1_x1, limb1_y1, bob1_radius*200)
-	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(limb2_x1, limb2_y1, bob2_radius*200)
-	target_x0, target_y0, target_x1, target_y1 = get_corners(target_x*200 + x_center, y_center - target_y*200, target_radius*200)
+	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(bob1_x, bob1_y, env.bob1_radius*200)
+	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(bob2_x, bob2_y, env.bob2_radius*200)
+	target_x0, target_y0, target_x1, target_y1 = get_corners(target_x, target_y, env.target_radius*200)
 
-	canvas.coords(elements["limb1"], x_center, y_center, limb1_x1, limb1_y1)
-	canvas.coords(elements["limb2"], limb1_x1, limb1_y1, limb2_x1, limb2_y1)
+	canvas.coords(elements["limb1"], x_center, y_center, bob1_x, bob1_y)
+	canvas.coords(elements["limb2"], bob1_x, bob1_y, bob2_x, bob2_y)
 	canvas.coords(elements["bob1"], bob1_x0, bob1_y0, bob1_x1, bob1_y1)
 	canvas.coords(elements["bob2"], bob2_x0, bob2_y0, bob2_x1, bob2_y1)
 	canvas.coords(elements["target"], target_x0, target_y0, target_x1, target_y1)
 
-	return
-
 def animate(vector, time_steps=10_000):
 	env = RobotArmGame()
-	visited = np.zeros((10_000,4))
+	visited = np.zeros((time_steps,6))
 	params = unpack_params(vector)
 	done = False
 	state = torch.from_numpy(env.reset()).float()
@@ -237,23 +216,15 @@ def animate(vector, time_steps=10_000):
 			state = torch.from_numpy(env.reset()).float()
 		state = torch.from_numpy(state_).float()
 
-	drawing_parameters = {
-		"l1":0.5,
-		"l2":0.5,
-		"bob1_radius":0.1,
-		"bob2_radius":0.1,
-		"target_radius":0.05,
-		"window_width":600,
-		"window_height":600,
-		"line_width":2
-	}
-
-	window, canvas = create_window(drawing_parameters["window_width"], drawing_parameters["window_height"])
-	elements = initial_draw(canvas, visited[0,:], drawing_parameters)
+	window, canvas = create_window(env.window_width, env.window_height)
+	initial_conditions_tk = convert_to_tkinter_coords(visited[0], env)
+	elements = initial_draw(canvas, initial_conditions_tk, env)
 
 	for t in range(1,time_steps):
 		next_state = visited[t]
-		move(canvas, elements, next_state, drawing_parameters)
+		print(f"bob1 coordinates: {next_state[0:2]}")
+		next_state_tk = convert_to_tkinter_coords(next_state, env)
+		move(canvas, elements, next_state_tk, env)
 		window.update()
 		time.sleep(0.005)
 	window.mainloop()
