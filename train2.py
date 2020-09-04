@@ -838,16 +838,15 @@ class Particle(Experiment):
 # Artificial Neural Network
 
 def model(x, unpacked_params):
-	l1,b1,l2,b2 = unpacked_params
-	y = torch.nn.functional.linear(x,l1,b1)
-	y = torch.relu(y)
-	y = torch.nn.functional.linear(y,l2,b2)
+	y = torch.nn.functional.linear(x,unpacked_params[0],unpacked_params[1])
+	for layer in range(1,int(len(unpacked_params)/2)):
+		y = torch.relu(y)
+		y = torch.nn.functional.linear(y,unpacked_params[layer*2],unpacked_params[layer*2+1])
 	y = torch.log_softmax(y,dim=0)
 	return y
 
-def unpack_params(params):
+def unpack_params(params, layers):
 	params = torch.from_numpy(params).float()
-	layers = [(hidden_nodes,6), (8,hidden_nodes)]
 	unpacked_params = []
 	e = 0
 	for i,l in enumerate(layers):
@@ -866,7 +865,7 @@ def evaluation_function(vector, render=False):
 	total_reward = 0
 	while not done:
 		if t < 4000:
-			params = unpack_params(vector)
+			params = unpack_params(vector, layers)
 			probs = model(state, params)
 			action = torch.distributions.Categorical(probs=probs).sample()
 			state_, reward, done, info = env.step(action.item())
@@ -887,7 +886,7 @@ def evaluation_function(vector, render=False):
 # Training the ANN for the robot arm problem
 
 def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
-	nodes=80, search_space=10, show_animation=True, render=False, disable_progress_bar=False, plot=True):
+	hidden_layers=[80,50], search_space=10, show_animation=True, disable_progress_bar=False, plot=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -905,10 +904,22 @@ def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
 	best_f : the resulting time with that configuration
 	'''
 
-	global hidden_nodes
-	hidden_nodes = nodes
+	global layers
+	layers = []
+	for layer in range(len(hidden_layers)+1):
+		if layer == 0:
+			layers.append((hidden_layers[0],6))
+		elif layer == len(hidden_layers):
+			layers.append((8,hidden_layers[-1]))
+		else:
+			layers.append((hidden_layers[layer],hidden_layers[layer-1]))
+	print(f"Layers: {layers}")
 
-	vector_length = 6*hidden_nodes + 8*hidden_nodes + hidden_nodes + 8
+	global vector_length
+	vector_length = 0
+	for layer in layers:
+		vector_length += layer[0]*layer[1] + layer[0]
+	print(f"Vector length: {vector_length}")
 
 	fn_info = {
 	"fn_name":'evaluation_function',
@@ -932,7 +943,6 @@ def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
 
 	best_position, best_f, _ = experiment.run()
 	best_parameters = best_position
-	value = best_f
 
 	if plot == True:
 		plt.plot(np.arange(time_steps), avg_rewards)
@@ -940,6 +950,4 @@ def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
 		plt.ylabel('Average reward')
 		plt.show()
 
-	if render == True:
-		evaluation_function(best_parameters, render=True)
-	return best_parameters, value
+	return best_parameters, layers

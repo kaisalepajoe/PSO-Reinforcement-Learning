@@ -5,33 +5,13 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import tkinter as tk
 import time
+from train2 import model
+from train2 import unpack_params
 
-def model(x, unpacked_params):
-	l1,b1,l2,b2 = unpacked_params
-	y = torch.nn.functional.linear(x,l1,b1)
-	y = torch.relu(y)
-	y = torch.nn.functional.linear(y,l2,b2)
-	y = torch.log_softmax(y,dim=0)
-	return y
-
-def unpack_params(params):
-	hidden_layer = int((len(params) - 8)/15)
-	params = torch.from_numpy(params).float()
-	layers = [(hidden_layer,6), (8,hidden_layer)]
-	unpacked_params = []
-	e = 0
-	for i,l in enumerate(layers):
-		s,e = e,e+np.prod(l)
-		weights = params[s:e].view(l)
-		s,e = e,e+l[0]
-		bias = params[s:e]
-		unpacked_params.extend([weights,bias])
-	return unpacked_params
-
-def get_scores(vector, iterations=1000):
+def get_scores(vector, layers, iterations=1000):
 	env = RobotArmGame()
 	scores = []
-	params = unpack_params(vector)
+	params = unpack_params(vector, layers=layers)
 	for iteration in tqdm(range(iterations)):
 		done = False
 		state = torch.from_numpy(env.reset()).float()
@@ -52,13 +32,13 @@ def get_scores(vector, iterations=1000):
 	scores = np.array(scores)
 	return scores
 
-def get_random_scores(vector_length, iterations=1000, search_space = 10):
+def get_random_scores(vector_length, layers, iterations=1000, search_space = 10):
 	env = RobotArmGame()
 	scores = []
 
 	for iteration in tqdm(range(iterations)):
 		vector = 2*search_space*np.random.random(vector_length) - search_space
-		params = unpack_params(vector)
+		params = unpack_params(vector, layers)
 		done = False
 		state = torch.from_numpy(env.reset()).float()
 		score = 0
@@ -78,7 +58,7 @@ def get_random_scores(vector_length, iterations=1000, search_space = 10):
 	scores = np.array(scores)
 	return scores	
 
-def compare_to_random(vector, iterations=1000):
+def compare_to_random(vector, layers, iterations=1000):
 	'''
 	Compares the found NN weights and biases vector to a random one
 
@@ -90,8 +70,8 @@ def compare_to_random(vector, iterations=1000):
 	iterations : int (default 1000)
 	The number of times to run the game before plotting results
 	'''
-	optimal_scores = get_scores(vector, iterations)
-	random_scores = get_random_scores(len(vector), iterations)
+	optimal_scores = get_scores(vector, layers, iterations)
+	random_scores = get_random_scores(len(vector), layers, iterations)
 	optimal_points = []
 	random_points = []
 	for i in range(len(optimal_scores)):
@@ -201,10 +181,10 @@ def move(canvas, elements, next_state_tk, env):
 	canvas.coords(elements["bob2"], bob2_x0, bob2_y0, bob2_x1, bob2_y1)
 	canvas.coords(elements["target"], target_x0, target_y0, target_x1, target_y1)
 
-def animate(vector, time_steps=10_000):
+def animate(vector, layers, time_steps=10_000):
 	env = RobotArmGame()
 	visited = np.zeros((time_steps,6))
-	params = unpack_params(vector)
+	params = unpack_params(vector, layers=layers)
 	done = False
 	state = torch.from_numpy(env.reset()).float()
 	for t in tqdm(range(time_steps)):
@@ -222,7 +202,6 @@ def animate(vector, time_steps=10_000):
 
 	for t in range(1,time_steps):
 		next_state = visited[t]
-		print(f"bob1 coordinates: {next_state[0:2]}")
 		next_state_tk = convert_to_tkinter_coords(next_state, env)
 		move(canvas, elements, next_state_tk, env)
 		window.update()
