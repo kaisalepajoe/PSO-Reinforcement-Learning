@@ -886,7 +886,7 @@ def evaluation_function(vector, render=False):
 
 # Training the ANN for the robot arm problem
 
-def train(N=9, time_steps=50, repetitions=1,\
+def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
 	nodes=80, search_space=10, show_animation=True, render=False, disable_progress_bar=False, plot=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
@@ -925,7 +925,7 @@ def train(N=9, time_steps=50, repetitions=1,\
 	"get_parameters_from":"average final pos"
 	}
 
-	constants = {'phi': 2.4, 'N': N, 'k': 3, 'time_steps': time_steps, 'repetitions': repetitions}
+	constants = {'phi': phi, 'N': N, 'k': 3, 'time_steps': time_steps, 'repetitions': repetitions}
 
 	experiment = Experiment(constants=constants, fn_info=fn_info)
 	#print("Getting parameters from "+fn_info["get_parameters_from"])
