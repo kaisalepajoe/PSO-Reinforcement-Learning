@@ -31,7 +31,7 @@ class RobotArmGame():
 
 	def reset(self):
 		# Generate initial state with constant target position and random arm position
-		target_x = 0.75
+		target_x = 0.25
 		target_y = 0.75
 
 		bob1_angle = generate_random_angle()

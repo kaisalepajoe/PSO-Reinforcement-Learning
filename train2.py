@@ -886,7 +886,7 @@ def evaluation_function(vector, render=False):
 # Training the ANN for the robot arm problem
 
 def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
-	hidden_layers=[80,50], search_space=10, show_animation=True, disable_progress_bar=False, plot=True):
+	hidden_layers=[100,80,50,40], search_space=10, show_animation=True, disable_progress_bar=False, plot=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
