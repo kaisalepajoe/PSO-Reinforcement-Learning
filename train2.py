@@ -527,6 +527,22 @@ class Swarm(Experiment):
 			for i,particle in enumerate(self.particles):
 				final_pos[i,:self.dim] = particle.pos
 			result = np.average(final_pos, axis=0)
+		if self.get_parameters_from == "centre of gravity":
+			print('Calculating centre of gravity')
+			final_pos = np.inf*np.ones((self.N, self.dim+1))
+			repetitions = 10
+			all_scores = np.inf*np.ones((self.N, repetitions))
+			for rep in tqdm(range(repetitions)):
+				for i, particle in enumerate(self.particles):
+					final_pos[i,:self.dim] = particle.pos 
+					score = eval(self.fn_name)(particle.pos)
+					all_scores[i,rep] = -1*score
+			average_scores = np.average(all_scores, axis=1)
+			avg_scores_matrix = np.inf*np.ones((self.N, self.dim+1))
+			for column in range(self.dim+1):
+				avg_scores_matrix[:,column] = average_scores
+			numerator = np.sum(final_pos*avg_scores_matrix, axis=0)
+			result = numerator/np.sum(average_scores)
 		return result
 
 	def run_algorithm(self):
@@ -837,12 +853,19 @@ class Particle(Experiment):
 
 # Artificial Neural Network
 
+def my_softmax(y):
+	max_value = torch.max(y).item()
+	y_exp = torch.exp(y - max_value)
+	denominator = torch.sum(y_exp)
+	output = y_exp/denominator
+	return output
+
 def model(x, unpacked_params):
 	y = torch.nn.functional.linear(x,unpacked_params[0],unpacked_params[1])
 	for layer in range(1,int(len(unpacked_params)/2)):
 		y = torch.relu(y)
 		y = torch.nn.functional.linear(y,unpacked_params[layer*2],unpacked_params[layer*2+1])
-	y = torch.log_softmax(y,dim=0)
+	y = my_softmax(y)
 	return y
 
 def unpack_params(params, layers):
@@ -864,9 +887,10 @@ def evaluation_function(vector, render=False):
 	t = 0
 	total_reward = 0
 	while not done:
-		if t < 4000:
+		if t < 5000:
 			params = unpack_params(vector, layers)
 			probs = model(state, params)
+			#print(probs)
 			action = torch.distributions.Categorical(probs=probs).sample()
 			state_, reward, done, info = env.step(action.item())
 			state = torch.from_numpy(state_).float()
@@ -877,16 +901,14 @@ def evaluation_function(vector, render=False):
 		else:
 			done = True
 	score = -1*total_reward
-	# Testing evening out the score
-	score = score+1000
 	return score
 
 ###################################################################
 
 # Training the ANN for the robot arm problem
 
-def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
-	hidden_layers=[100,80,50,40], search_space=10, show_animation=True, disable_progress_bar=False, plot=True):
+def train(N=15, time_steps=50, repetitions=1, phi=2.4,\
+	hidden_layers=[100, 80], search_space=1, show_animation=True, disable_progress_bar=False, plot=True):
 	'''
 	Trains the neural network using particle swarm optimisation.
 	Returns a vector of the best weights and biases and the time with that configuration
@@ -933,7 +955,7 @@ def train(N=9, time_steps=50, repetitions=1, phi=2.4,\
 	"show_animation":show_animation,
 	"disable_progress_bar":disable_progress_bar,
 	"disable_printing":True,
-	"get_parameters_from":"average final pos"
+	"get_parameters_from":"centre of gravity"
 	}
 
 	constants = {'phi': phi, 'N': N, 'k': 3, 'time_steps': time_steps, 'repetitions': repetitions}

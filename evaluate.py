@@ -18,7 +18,7 @@ def get_scores(vector, layers, iterations=1000):
 		score = 0
 		t = 0
 		while not done:
-			if t < 4000:
+			if t < 5000:
 
 				probs = model(state, params)
 				action = torch.distributions.Categorical(probs=probs).sample()
@@ -37,17 +37,38 @@ def get_random_scores(vector_length, layers, iterations=1000, search_space = 10)
 	scores = []
 
 	for iteration in tqdm(range(iterations)):
-		vector = 2*search_space*np.random.random(vector_length) - search_space
-		params = unpack_params(vector, layers)
+		done = False
+		state = torch.from_numpy(env.reset()).float()
+		score = 0
+		t = 0
+		params = np.random.uniform(-1,1,vector_length)
+		params = unpack_params(params, layers)
+		while not done:
+			if t < 5000:
+				probs = model(state, params)
+				action = torch.distributions.Categorical(probs=probs).sample()
+				state_, reward, done, info = env.step(action.item())
+				state = torch.from_numpy(state_).float()
+				t += 1
+			else:
+				done = True
+		score = t
+		scores.append(score)
+	scores = np.array(scores)
+	return scores	
+
+def get_random_net_scores(vector_length, layers, iterations=1000, search_space = 10):
+	env = RobotArmGame()
+	scores = []
+
+	for iteration in tqdm(range(iterations)):
 		done = False
 		state = torch.from_numpy(env.reset()).float()
 		score = 0
 		t = 0
 		while not done:
-			if t < 4000:
-
-				probs = model(state, params)
-				action = torch.distributions.Categorical(probs=probs).sample()
+			if t < 5000:
+				action = np.random.choice(np.arange(8))
 				state_, reward, done, info = env.step(action.item())
 				state = torch.from_numpy(state_).float()
 				t += 1
@@ -72,14 +93,18 @@ def compare_to_random(vector, layers, iterations=1000):
 	'''
 	optimal_scores = get_scores(vector, layers, iterations)
 	random_scores = get_random_scores(len(vector), layers, iterations)
+	random_net_scores = get_random_net_scores(len(vector), layers, iterations)
 	optimal_points = []
 	random_points = []
+	random_net_points = []
 	for i in range(len(optimal_scores)):
 		optimal_points.append(np.sum(optimal_scores[0:i]))
 		random_points.append(np.sum(random_scores[0:i]))
+		random_net_points.append(np.sum(random_net_scores[0:i]))
 	x = np.arange(len(optimal_points))
 	plt.plot(x,optimal_points, label='learned')
 	plt.plot(x,random_points, label='random')
+	plt.plot(x,random_net_points, label='random weights')
 	plt.xlabel('Iterations')
 	plt.ylabel('Total time taken')
 	plt.legend()

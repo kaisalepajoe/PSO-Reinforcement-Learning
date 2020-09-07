@@ -11,9 +11,6 @@ architectures = np.array([
 	[300],
 	[600,150,100],
 	[300,300,300],
-	[700,600,400,200,100],
-	[700,300,500,200,30],
-	[800,700,600,500,400,300],
 	])
 
 plot_x = np.arange(len(architectures))
@@ -21,7 +18,7 @@ plot_y_trained = np.zeros(len(architectures))
 plot_y_random = np.zeros(len(architectures))
 
 for i,hidden_layers in enumerate(architectures):
-	print(f"Hidden layers: {architectures}")
+	print(f"Hidden layers: {hidden_layers}")
 	params, layers = train(time_steps=100, hidden_layers=hidden_layers, show_animation=False, plot=False)
 	trained_scores = get_scores(params, layers)
 	random_scores = get_random_scores(len(params), layers)
@@ -29,6 +26,8 @@ for i,hidden_layers in enumerate(architectures):
 	average_random_score = np.average(random_scores)
 	plot_y_trained[i] = average_trained_score
 	plot_y_random[i] = average_random_score
+	print(f"Average trained score: {average_trained_score}")
+	print(f"Average random score: {average_random_score}")
 
 plt.plot(plot_x, plot_y_trained, label='Trained')
 plt.plot(plot_x, plot_y_random, label='Random')
