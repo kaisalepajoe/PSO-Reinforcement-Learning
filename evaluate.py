@@ -5,8 +5,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import tkinter as tk
 import time
-from train2 import model
-from train2 import unpack_params
+from train_swarm import model
+from train_swarm import unpack_params
 
 def get_scores(vector, layers, iterations=1000):
 	env = RobotArmGame()
@@ -18,11 +18,10 @@ def get_scores(vector, layers, iterations=1000):
 		score = 0
 		t = 0
 		while not done:
-			if t < 5000:
+			if t < 3000:
 
-				probs = model(state, params)
-				action = torch.distributions.Categorical(probs=probs).sample()
-				state_, reward, done, info = env.step(action.item())
+				action = model(state, params)
+				state_, reward, done, info = env.step(action.numpy())
 				state = torch.from_numpy(state_).float()
 				t += 1
 			else:
@@ -44,10 +43,9 @@ def get_random_scores(vector_length, layers, iterations=1000, search_space = 10)
 		params = np.random.uniform(-1,1,vector_length)
 		params = unpack_params(params, layers)
 		while not done:
-			if t < 5000:
-				probs = model(state, params)
-				action = torch.distributions.Categorical(probs=probs).sample()
-				state_, reward, done, info = env.step(action.item())
+			if t < 3000:
+				action = model(state, params)
+				state_, reward, done, info = env.step(action.numpy())
 				state = torch.from_numpy(state_).float()
 				t += 1
 			else:
@@ -67,9 +65,9 @@ def get_random_net_scores(vector_length, layers, iterations=1000, search_space =
 		score = 0
 		t = 0
 		while not done:
-			if t < 5000:
-				action = np.random.choice(np.arange(8))
-				state_, reward, done, info = env.step(action.item())
+			if t < 3000:
+				action = np.random.uniform(-0.05, 0.05, 2)
+				state_, reward, done, info = env.step(action)
 				state = torch.from_numpy(state_).float()
 				t += 1
 			else:
@@ -214,9 +212,8 @@ def animate(vector, layers, time_steps=10_000):
 	state = torch.from_numpy(env.reset()).float()
 	for t in tqdm(range(time_steps)):
 		visited[t] = state.numpy()
-		probs = model(state, params)
-		action = torch.distributions.Categorical(probs=probs).sample()
-		state_, reward, done, info = env.step(action.item())
+		action = model(state, params)
+		state_, reward, done, info = env.step(action.numpy())
 		if done == True:
 			state = torch.from_numpy(env.reset()).float()
 		state = torch.from_numpy(state_).float()

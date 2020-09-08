@@ -1,16 +1,5 @@
 # From scratch robot arm environment
 import numpy as np
-# There are 8 possible actions
-
-speed = 0.05
-actions = np.array([[-speed, -speed],
-					[-speed, 0],
-					[-speed, speed],
-					[0, -speed],
-					[0, speed],
-					[speed, -speed],
-					[speed, 0],
-					[speed, speed]],)
 
 def generate_random_angle():
 	# The angle is in radians
@@ -52,18 +41,17 @@ class RobotArmGame():
 		bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y = self.state
 		distance_between_centers = np.sqrt((bob2_x - target_x)**2 + (bob2_y - target_y)**2)
 		if distance_between_centers <= self.bob2_radius + self.target_radius:
-			reward = 100
+			reward = 0
 			done = True
 		else:
 			reward = -1
 			done = False
 		return reward, done
 
-	def step(self, action_index):
-		action = actions[action_index]
-
-		bob1_angle = self.angles[0] + action[0]
-		bob2_angle = self.angles[1] + action[1]
+	def step(self, action):
+		max_speed = 0.05
+		bob1_angle = self.angles[0] + action[0]*max_speed
+		bob2_angle = self.angles[1] + action[1]*max_speed
 
 		bob1_x = self.l1*np.cos(bob1_angle)
 		bob1_y = self.l1*np.sin(bob1_angle)
