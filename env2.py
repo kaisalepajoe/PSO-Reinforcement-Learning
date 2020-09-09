@@ -18,10 +18,10 @@ class RobotArmGame():
 		self.line_width = 2
 		self.animate = animate
 
-	def reset(self):
+	def reset(self, target_position):
 		# Generate initial state with constant target position and random arm position
-		target_x = 0.25
-		target_y = 0.75
+		target_x = target_position[0]
+		target_y = target_position[1]
 
 		bob1_angle = generate_random_angle()
 		bob2_angle = generate_random_angle()
@@ -51,7 +51,7 @@ class RobotArmGame():
 	def step(self, action):
 		max_speed = 0.05
 		bob1_angle = self.angles[0] + action[0]*max_speed
-		bob2_angle = self.angles[1] + action[1]*max_speed
+		bob2_angle = self.angles[1] + action[0]*max_speed + action[1]*max_speed
 
 		bob1_x = self.l1*np.cos(bob1_angle)
 		bob1_y = self.l1*np.sin(bob1_angle)
