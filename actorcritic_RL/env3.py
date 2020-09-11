@@ -1,17 +1,29 @@
 # From scratch robot arm environment
 import numpy as np
 
+speed = 0.05
+actions = np.array([
+	[-speed, -speed],
+	[-speed, 0],
+	[-speed, speed],
+	[0, -speed],
+	[0, speed],
+	[speed, -speed],
+	[speed, 0],
+	[speed, speed],
+	])
+
 def generate_random_angle():
 	# The angle is in radians
 	angle = np.random.random()*2*np.pi
 	return angle
 
-def get_reward_ratio(initial_state):
-	bob_x, bob_y = initial_state[2:4]
-	target_x, target_y = initial_state[4:6]
+def get_reward_ratio(state):
+	bob_x, bob_y = state[2:4]
+	target_x, target_y = state[4:]
 	d = np.sqrt((bob_x - target_x)**2 + (bob_y - target_y)**2)
-	max_distance = 2
-	ratio = d/max_distance
+	max_d = 2
+	ratio = d/max_d
 	return ratio
 
 class RobotArmGame():
@@ -31,11 +43,8 @@ class RobotArmGame():
 		target_x = target_position[0]
 		target_y = target_position[1]
 
-		# testing constant bob initial position
-		#bob1_angle = generate_random_angle()
-		#bob2_angle = generate_random_angle()
-		bob1_angle = 0.50
-		bob2_angle = 1.60
+		bob1_angle = generate_random_angle()
+		bob2_angle = generate_random_angle()
 
 		bob1_x = self.l1*np.cos(bob1_angle)
 		bob1_y = self.l1*np.sin(bob1_angle)
@@ -46,6 +55,7 @@ class RobotArmGame():
 		self.angles = np.array([bob1_angle, bob2_angle])
 		self.state = np.array([bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y])
 		self.reward_ratio = get_reward_ratio(self.state)
+
 		return self.state
 
 	def get_reward(self):
@@ -60,10 +70,9 @@ class RobotArmGame():
 		reward = reward/self.reward_ratio
 		return reward, done
 
-	def step(self, action):
-		max_speed = 0.01
-		bob1_angle = self.angles[0] + action[0]*max_speed
-		bob2_angle = self.angles[1] + action[0]*max_speed + action[1]*max_speed
+	def step(self, action_index):
+		bob1_angle = self.angles[0] + actions[action_index][0]
+		bob2_angle = self.angles[1] + (actions[action_index][0] + actions[action_index][1])
 
 		bob1_x = self.l1*np.cos(bob1_angle)
 		bob1_y = self.l1*np.sin(bob1_angle)

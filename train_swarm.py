@@ -14,7 +14,8 @@ import io
 import sys
 from tqdm import tqdm
 import torch
-from env2 import RobotArmGame
+#from env2 import RobotArmGame
+import gym
 import tkinter as tk
 import time
 
@@ -33,153 +34,47 @@ def unpack_params(params, layers):
 	return unpacked_params
 
 def model(x, unpacked_params):
+	# Returns one value between 0 and 1
 	y = torch.nn.functional.linear(x,unpacked_params[0],unpacked_params[1])
 	for layer in range(1,int(len(unpacked_params)/2)):
 		y = torch.relu(y)
 		y = torch.nn.functional.linear(y,unpacked_params[layer*2],unpacked_params[layer*2+1])
-	y = torch.tanh(y)
+	y = torch.sigmoid(y)
 	return y
 
 def epsilon_greedy(state, params, layers):
+	# Returns the action 0 or 1
 	epsilon = 0.01
 	random_number = np.random.random()
 	if random_number < epsilon:
-		action = np.random.uniform(-1,1,2)
+		action = np.random.choice([0,1])
 	else:
 		action = model(state, params).numpy()
+		if action < 0.5:
+			action = 0
+		else:
+			action = 1
 	return action
 
-def get_target_distance(bob2_position, target_position):
-	bob_x, bob_y = bob2_position
-	target_x, target_y = target_position
-	d = np.sqrt((bob_x - target_x)**2 + (bob_y - target_y)**2)
-	return d
-
-def get_min_time(target_distance, max_speed=0.05):
-	return target_distance/max_speed
-
-def evaluate(params_vector, layers, target_position, random_action=False):
+def evaluate(params_vector, layers, random_action=False):
 	global n_evaluations
 	n_evaluations += 1
-	env = RobotArmGame()
+	env = gym.make('CartPole-v0')
 	done = False
-	state = torch.from_numpy(env.reset(target_position)).float()
-	target_distance = get_target_distance(state[2:4], state[4:6])
-	min_time = get_min_time(target_distance)
-	t = 0
-	total_reward = 0
+	state = torch.from_numpy(env.reset()).float()
+	rewards = []
 	while not done:
-		if t < 3000:
-			if random_action == False:
-				params = unpack_params(params_vector, layers)
-				action = epsilon_greedy(state, params, layers)
-			else:
-				action = np.random.uniform(-1,1,2)
-			state_, reward, done, info = env.step(action)
-			state = torch.from_numpy(state_).float()
-			t += 1
-			total_reward += reward
+		if random_action == False:
+			params = unpack_params(params_vector, layers)
+			action = epsilon_greedy(state, params, layers)
 		else:
-			done = True
-	# Testing scaling by minimum possible time
-	return total_reward/min_time
-
-
-def get_corners(x, y, r):
-	'''
-	Returns the coordinates of the corners of a circle
-	Parameters
-	----------
-	x (float): x-coordinate of center
-	y (float): y-coordinate of center
-	r (float): radius of circle
-	Returns
-	-------
-	(x0, y0, x1, y1)
-	x0 (float):x-coordinate of upper left corner
-	y0 (float):y-coordinate of upper left corner
-	x1 (float):x-coordinate of lower right corner
-	y1 (float):y-coordinate of lower right corner
-	'''
-	x0 = x - r
-	y0 = y - r
-	x1 = x + r
-	y1 = y + r
-	return x0, y0, x1, y1
-
-def convert_to_tkinter_coords(state, env):
-	# bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y
-	for x in [0,2,4]:
-		state[x] = env.window_width/2*(state[x] + 1)
-	for y in [1,3,5]:
-		state[y] = env.window_height/2*(1 - state[y])
-	return state
-
-# Create window
-def create_window(window_width, window_height):
-	window = tk.Tk()
-	canvas = tk.Canvas(window, width=window_width, height=window_height, bg="white")
-	canvas.grid() # tell tkinter where to place the canvas
-	window.title("Robot Arm")
-	return window, canvas
-
-# Draw all shapes with initial positions
-def initial_draw(canvas, initial_conditions_tk, env):
-	bob1_angle = env.angles[0]
-	bob2_angle = env.angles[1]
-	# Initial conditions with coordinate 0 in centre of window
-	bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y = initial_conditions_tk
-
-	x_center = env.window_width/2
-	y_center = env.window_height/2
-
-	# Draw the first limb
-	limb1 = canvas.create_line(x_center, y_center, bob1_x, bob1_y, width=env.line_width)
-
-	# Draw the second limb
-	limb2 = canvas.create_line(bob1_x, bob1_y, bob2_x, bob2_y, width=env.line_width)
-
-	# Draw the first bob
-	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(bob1_x, bob1_y, env.bob1_radius*200)
-	bob1 = canvas.create_oval(bob1_x0, bob1_y0, bob1_x1, bob1_y1, fill="black")
-
-	# Draw the second bob
-	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(bob2_x, bob2_y, env.bob2_radius*200)
-	bob2 = canvas.create_oval(bob2_x0, bob2_y0, bob2_x1, bob2_y1, fill="blue")
-
-	# Draw the centre pivot
-	cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1 = get_corners(x_center,y_center,10)
-	cpivot = canvas.create_oval(cpivot_x0, cpivot_y0, cpivot_x1, cpivot_y1, fill="black")
-
-	# Draw the target
-	target_x0, target_y0, target_x1, target_y1 = get_corners(target_x, target_y, env.target_radius*200)
-	target = canvas.create_oval(target_x0, target_y0, target_x1, target_y1, fill="red")
-
-	elements = {
-		"limb1":limb1,
-		"limb2":limb2,
-		"bob1":bob1,
-		"bob2":bob2,
-		"target":target
-	}
-	return elements
-
-# Move pendulum
-def move(canvas, elements, next_state_tk, env):
-	x_center = env.window_width/2
-	y_center = env.window_height/2
-
-	bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y = next_state_tk
-
-	bob1_x0, bob1_y0, bob1_x1, bob1_y1 = get_corners(bob1_x, bob1_y, env.bob1_radius*200)
-	bob2_x0, bob2_y0, bob2_x1, bob2_y1 = get_corners(bob2_x, bob2_y, env.bob2_radius*200)
-	target_x0, target_y0, target_x1, target_y1 = get_corners(target_x, target_y, env.target_radius*200)
-
-	canvas.coords(elements["limb1"], x_center, y_center, bob1_x, bob1_y)
-	canvas.coords(elements["limb2"], bob1_x, bob1_y, bob2_x, bob2_y)
-	canvas.coords(elements["bob1"], bob1_x0, bob1_y0, bob1_x1, bob1_y1)
-	canvas.coords(elements["bob2"], bob2_x0, bob2_y0, bob2_x1, bob2_y1)
-	canvas.coords(elements["target"], target_x0, target_y0, target_x1, target_y1)
+			action = np.random.choice([0,1])
+		state_, reward, done, info = env.step(action)
+		state = torch.from_numpy(state_).float()
+		rewards.append(reward)
+	rewards = np.array(rewards)
+	total_reward = np.sum(rewards)
+	return total_reward
 
 ###################################################################
 
@@ -213,12 +108,12 @@ class Swarm():
 		initial_velocities = np.random.uniform(-self.vmax, self.vmax, (self.N, self.dim))
 		return initial_velocities
 
-	def create_particles(self, initial_positions, initial_velocities, target_position):
+	def create_particles(self, initial_positions, initial_velocities):
 		# Create array of initial p-values by evaluating initial positions
 		p_values = np.inf*np.ones((self.N, self.dim+1))
 		for i, pos in enumerate(initial_positions):
 			p_values[i,0:self.dim] = pos		
-			value = evaluate(pos, self.layers, target_position)
+			value = evaluate(pos, self.layers)
 			p_values[i,self.dim] = value
 		# Create list of particle objects
 		self.particles = []
@@ -234,17 +129,17 @@ class Swarm():
 		for particle in self.particles:
 			particle.informants = np.random.choice(self.particles, particle.k)
 
-	def distribute_swarm(self, target_position):
+	def distribute_swarm(self):
 		# Create array of initial positions and velocities
 		initial_positions = self.random_initial_positions()
 		initial_velocities = self.random_initial_velocities()
 
-		self.create_particles(initial_positions, initial_velocities, target_position)
+		self.create_particles(initial_positions, initial_velocities)
 
 		# Initiate k informants randomly
 		self.random_informants()
 
-	def evolve(self, target_position):
+	def evolve(self):
 		# Initialise array of positions for animation
 		self.positions = np.inf*np.ones((self.time_steps, self.N, self.dim+1))		
 		# Evolve swarm for all time steps
@@ -254,7 +149,7 @@ class Swarm():
 			disable=self.disable_progress_bar):
 			particle_rewards = []
 			for i, particle in enumerate(self.particles):
-				particle_reward = particle.step(target_position)
+				particle_reward = particle.step()
 				particle_rewards.append(particle_reward)
 				# Update positions for animation
 				self.positions[time_step,i,:-1] = particle.pos
@@ -289,7 +184,7 @@ class Swarm():
 			for rep in tqdm(range(repetitions)):
 				for i, particle in enumerate(self.particles):
 					final_pos[i,:self.dim] = particle.pos 
-					score = evaluate(particle.pos, particle.layers, target_position)
+					score = evaluate(particle.pos, particle.layers)
 					all_scores[i,rep] = -1*score
 			average_scores = np.average(all_scores, axis=1)
 			avg_scores_matrix = np.inf*np.ones((self.N, self.dim+1))
@@ -299,7 +194,7 @@ class Swarm():
 			result = numerator/np.sum(average_scores)
 		return result
 
-	def run_algorithm(self, target_position):
+	def run_algorithm(self):
 		results = np.inf*np.ones((self.repetitions, self.dim+1))
 		# all_positions contains all the visited positions for each repetition
 		# all_positions is used to create an animation of the swarm
@@ -307,9 +202,9 @@ class Swarm():
 
 		for r in range(self.repetitions):
 			self.current_repetition = r+1
-			self.distribute_swarm(target_position)
-			self.evolve(target_position)
-			result = self.get_parameters(target_position=target_position)
+			self.distribute_swarm()
+			self.evolve()
+			result = self.get_parameters()
 			results[r] = result
 			self.all_positions[r] = self.positions
 
@@ -436,8 +331,8 @@ class Particle(Swarm):
 		is_allowed = np.all(is_allowed, axis=1)
 		return is_allowed
 
-	def step(self, target_position):
-		value = evaluate(self.pos, self.layers, target_position)
+	def step(self):
+		value = evaluate(self.pos, self.layers)
 		self.update_p(value)
 		self.update_g(value)
 		self.find_vel()
@@ -448,18 +343,22 @@ class Particle(Swarm):
 
 class Training():
 	def __init__(self, hidden_layers=[15,10], search_space=2,
-		N=9, time_steps=100, repetitions=1, k=3, final_result_from='average final pos',
-		show_animation=True, disable_progress_bar=False, disable_printing=True, plot=True):
+		N=9, time_steps=100, repetitions=1, k=3, final_result_from='g-values',
+		show_animation=True, disable_progress_bar=False, disable_printing=False, plot=True):
 		
 		global n_evaluations
 		n_evaluations = 0
 
+		self.env = 'CartPole-v0'
+
 		layers = []
 		for layer in range(len(hidden_layers)+1):
 			if layer == 0:
-				layers.append((hidden_layers[0],6))
+				# changed
+				layers.append((hidden_layers[0],4))
 			elif layer == len(hidden_layers):
-				layers.append((2,hidden_layers[-1]))
+				# changed
+				layers.append((1,hidden_layers[-1]))
 			else:
 				layers.append((hidden_layers[layer], hidden_layers[layer-1]))
 		self.layers = layers
@@ -468,7 +367,6 @@ class Training():
 		for layer in layers:
 			vector_length += layer[0]*layer[1] + layer[0]
 		self.vector_length = vector_length
-
 		self.info = {
 			'N':N,
 			'time_steps':time_steps,
@@ -481,14 +379,12 @@ class Training():
 			'disable_progress_bar':disable_progress_bar,
 		}
 
-		self.target_position = np.random.uniform(-1,1,2)
-
 		print(f"Vector length: {self.vector_length}")
 		print(f"Layers: {hidden_layers}")
 		# Create swarm and evolve the swarm for the required number of repetitions.
 		swarm = Swarm(self.info)
-		swarm.distribute_swarm(self.target_position)
-		swarm.run_algorithm(self.target_position)
+		swarm.distribute_swarm()
+		swarm.run_algorithm()
 		self.params_vector = swarm.best_position
 
 		if disable_printing == False:
@@ -505,28 +401,16 @@ class Training():
 			plt.ylabel('Average score of swarm')
 			plt.show()
 
-
-	def animate(self, time_steps=10_000):
-		env = RobotArmGame()
-		visited = np.zeros((time_steps,6))
-		params = unpack_params(self.params_vector, layers=self.layers)
-		done = False
-		state = torch.from_numpy(env.reset(self.target_position)).float()
-		for t in tqdm(range(time_steps)):
-			visited[t] = state.numpy()
-			action = epsilon_greedy(state, params, self.layers)
-			state_, reward, done, info = env.step(action)
-			if done == True:
-				state_ = env.reset(self.target_position)
-			state = torch.from_numpy(state_).float()
-		window, canvas = create_window(env.window_width, env.window_height)
-		initial_conditions_tk = convert_to_tkinter_coords(visited[0], env)
-		elements = initial_draw(canvas, initial_conditions_tk, env)
-
-		for t in range(1,time_steps):
-			next_state = visited[t]
-			next_state_tk = convert_to_tkinter_coords(next_state, env)
-			move(canvas, elements, next_state_tk, env)
-			window.update()
-			time.sleep(0.005)
-		window.mainloop()
+	def animate(self, episodes=3):
+		env = gym.make(self.env)
+		params = unpack_params(self.params_vector, self.layers)
+		for ep in range(episodes):
+			done = False
+			state = torch.from_numpy(env.reset()).float()
+			while not done:
+				action = epsilon_greedy(state, params, self.layers)
+				state_, reward, done, info = env.step(action)
+				state = torch.from_numpy(state_).float()
+				env.render()
+			env.close()
+			ep += 1
