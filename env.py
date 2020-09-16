@@ -27,16 +27,12 @@ def get_reward_ratio(state):
 	return ratio
 
 class RobotArmGame():
-	def __init__(self, animate=False):
-		self.window_width = 600
-		self.window_height = 600
+	def __init__(self):
 		self.bob1_radius = 0.05
 		self.bob2_radius = 0.05
 		self.target_radius = 0.05
 		self.l1 = 0.25
 		self.l2 = 0.25
-		self.line_width = 2
-		self.animate = animate
 
 	def reset(self):
 		target_x = 0.5
