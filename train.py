@@ -1,24 +1,16 @@
 # This algorithm is inspired by PSO(0) from the book 
 # "Particle Swarm Optimization" by Maurice Clerc.
-# The goal is to train a robotic arm to reach a target on the screen
 
 ###################################################################
 
-# Import required modules
 import numpy as np 
-import math
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-import pkgutil
-import io
-import sys
 from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 from env import RobotArmGame
 import gym
-import tkinter as tk
-import time
 
 ###################################################################
 
@@ -41,7 +33,6 @@ def model(x, unpacked_params):
 		y = torch.nn.functional.linear(y,unpacked_params[layer*2],unpacked_params[layer*2+1])
 	y = torch.sigmoid(y)
 	action_index = torch.argmax(y)
-	#print(f"Action: {action_index}")
 	return action_index
 
 def epsilon_greedy(state, params, layers):
@@ -79,7 +70,6 @@ def evaluate(params_vector, layers, repetitions=3, random_action=False):
 		reward_per_rep.append(total_reward)
 	reward_per_rep = np.array(reward_per_rep)
 	average_reward_per_rep = np.sum(reward_per_rep)/repetitions
-	#print(f"Evaluation completed with reward: {average_reward_per_rep}")
 	return average_reward_per_rep
 
 ###################################################################
@@ -136,16 +126,12 @@ class Swarm():
 			particle.informants = np.random.choice(self.particles, particle.k)
 
 	def distribute_swarm(self):
-		#print(f"Distributing particles")
 		# Create array of initial positions and velocities
 		initial_positions = self.random_initial_positions()
 		initial_velocities = self.random_initial_velocities()
-
 		self.create_particles(initial_positions, initial_velocities)
-
 		# Initiate k informants randomly
 		self.random_informants()
-		#print(f"Particles distributed!")
 
 	def evolve(self):
 		# Initialise array of positions for animation
@@ -158,7 +144,6 @@ class Swarm():
 			particle_rewards = []
 			for i, particle in enumerate(self.particles):
 				particle_reward = particle.step()
-				#print(f"Particle step completed for particle {i}")
 				particle_rewards.append(particle_reward)
 				# Update positions for animation
 				self.positions[time_step,i,:-1] = particle.pos
@@ -219,8 +204,6 @@ class Swarm():
 
 		self.best_value_index = np.argmax(results[:,self.dim])
 		self.best_position = results[self.best_value_index][0:self.dim]
-		# delete following
-		#self.best_average_scores = np.average(self.all_positions[self.best_value_index,:,:,-1], axis=1)
 		assert len(self.avg_rewards) == self.time_steps
 
 		return self.best_position
@@ -254,12 +237,7 @@ class Swarm():
 
 ###################################################################
 
-# Particle objects are created within the swarm class methods. 
 class Particle(Swarm):
-	'''
-	Particle instances are created within the Swarm class methods. Particles
-	inherit constants and function info from the Experiment class.
-	'''
 
 	def set_initial_state(self, pos, vel, p):
 		self.pos = pos
@@ -276,7 +254,7 @@ class Particle(Swarm):
 	def communicate(self):
 		'''
 		Receives g-values from informants and updates the Particle's g-value accordingly.
-		If the best received g-value is smaller than the Particle's g-value, then the
+		If the best received g-value is larger than the Particle's g-value, then the
 		particles g-value is set to the received g-value.
 		'''
 		# Receive best positions with values from informants
@@ -286,7 +264,7 @@ class Particle(Swarm):
 		# Find best g from communicated values
 		i = np.argmax(received[:,self.dim])
 		best_received_g = received[i]
-		# Set g to LOWEST value
+		# Set g to highest value
 		if best_received_g[-1] > self.g[-1]:
 			self.g = best_received_g
 
@@ -318,7 +296,6 @@ class Particle(Swarm):
 		possible_vel = self.c1*self.vel + \
 			c2*(self.p[0:self.dim] - self.pos) + \
 			c3*(self.g[0:self.dim] - self.pos)	
-
 		# Constrain velocity
 		smaller_than_vmax = possible_vel < self.vmax
 		possible_vel = np.where(smaller_than_vmax, possible_vel, self.vmax)
@@ -354,10 +331,14 @@ class Particle(Swarm):
 class Training():
 	def __init__(self, hidden_layers=[10], search_space=10,
 		N=8, time_steps=60, repetitions=1, k=3, final_result_from='centre of gravity',
-		c1=0.7298, cmax=1.4960, # confidence values taken from a research paper
+		c1=0.7298, cmax=1.4960,
 		show_animation=True, disable_progress_bar=False, disable_printing=False, plot=True,
 		env_name = 'CartPole-v0'):
-		
+		'''
+		confidence values c1 and cmax taken from R.C. Eberhart, Y. Shi, Comparing inertia weights 
+		and constriction factors in particle swarm optimization, in: 
+		Proceedings of the IEEE Congress on Evolutionary Computation, San Diego, USA, 2000, pp. 84–88.
+		'''
 		global n_evaluations
 		n_evaluations = 0
 
@@ -441,19 +422,3 @@ class Training():
 				state = torch.from_numpy(state_).float()
 				env.render()
 			env.close()
-
-def optimize_layers(training_reps=5):
-	possible_layers = [100,60,30,10]
-	avg_rewards = []
-	for layers in possible_layers:
-		print()
-		print(f"hidden_layers = [{layers}]")
-		rep_rewards = []
-		for rep in range(training_reps):
-			result = Training(hidden_layers=[layers], show_animation=False, disable_printing=True, plot=False)
-			rep_rewards.append(result.average_eplen)
-		avg_rewards.append(np.average(rep_rewards))
-	plt.plot(possible_layers, avg_rewards)
-	plt.xlabel('hidden nodes')
-	plt.ylabel('Average reward')
-	plt.show()
