@@ -1,4 +1,4 @@
-# Robot Arm Reinforcement Learning using Particle Swarm Optimization
+# Reinforcement Learning using Particle Swarm Optimization
 
 ## Introduction
 
