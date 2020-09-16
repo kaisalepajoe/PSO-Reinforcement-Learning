@@ -1,7 +1,7 @@
 # From scratch robot arm environment
 import numpy as np
 
-speed = 0.05
+speed = 0.01
 actions = np.array([
 	[-speed, -speed],
 	[-speed, 0],
@@ -20,34 +20,33 @@ def generate_random_angle():
 
 def get_reward_ratio(state):
 	bob_x, bob_y = state[2:4]
-	target_x, target_y = state[4:]
+	target_x, target_y = state[4:6]
 	d = np.sqrt((bob_x - target_x)**2 + (bob_y - target_y)**2)
-	max_d = 2
-	ratio = d/max_d
+	max_distance = 1
+	ratio = d/max_distance
 	return ratio
 
 class RobotArmGame():
 	def __init__(self, animate=False):
 		self.window_width = 600
 		self.window_height = 600
-		self.bob1_radius = 0.1
-		self.bob2_radius = 0.1
-		self.target_radius = 0.1
-		self.l1 = 0.5
-		self.l2 = 0.5
+		self.bob1_radius = 0.05
+		self.bob2_radius = 0.05
+		self.target_radius = 0.05
+		self.l1 = 0.25
+		self.l2 = 0.25
 		self.line_width = 2
 		self.animate = animate
 
-	def reset(self, target_position):
-		# Generate initial state with constant target position and random arm position
-		target_x = target_position[0]
-		target_y = target_position[1]
+	def reset(self):
+		target_x = 0.5
+		target_y = 0.9
 
 		bob1_angle = generate_random_angle()
 		bob2_angle = generate_random_angle()
 
-		bob1_x = self.l1*np.cos(bob1_angle)
-		bob1_y = self.l1*np.sin(bob1_angle)
+		bob1_x = 0.5 + self.l1*np.cos(bob1_angle)
+		bob1_y = 0.5 + self.l1*np.sin(bob1_angle)
 
 		bob2_x = bob1_x + self.l2*np.cos(bob2_angle)
 		bob2_y = bob1_y + self.l2*np.sin(bob2_angle)
@@ -55,7 +54,6 @@ class RobotArmGame():
 		self.angles = np.array([bob1_angle, bob2_angle])
 		self.state = np.array([bob1_x, bob1_y, bob2_x, bob2_y, target_x, target_y])
 		self.reward_ratio = get_reward_ratio(self.state)
-
 		return self.state
 
 	def get_reward(self):
@@ -72,10 +70,10 @@ class RobotArmGame():
 
 	def step(self, action_index):
 		bob1_angle = self.angles[0] + actions[action_index][0]
-		bob2_angle = self.angles[1] + (actions[action_index][0] + actions[action_index][1])
+		bob2_angle = self.angles[1] + actions[action_index][0] + actions[action_index][1]
 
-		bob1_x = self.l1*np.cos(bob1_angle)
-		bob1_y = self.l1*np.sin(bob1_angle)
+		bob1_x = 0.5 + self.l1*np.cos(bob1_angle)
+		bob1_y = 0.5 + self.l1*np.sin(bob1_angle)
 
 		bob2_x = bob1_x + self.l2*np.cos(bob2_angle)
 		bob2_y = bob1_y + self.l2*np.sin(bob2_angle)

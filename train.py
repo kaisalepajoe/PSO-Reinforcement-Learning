@@ -14,7 +14,8 @@ import io
 import sys
 from tqdm import tqdm
 import torch
-#from env2 import RobotArmGame
+import torch.nn.functional as F
+from env import RobotArmGame
 import gym
 import tkinter as tk
 import time
@@ -34,47 +35,52 @@ def unpack_params(params, layers):
 	return unpacked_params
 
 def model(x, unpacked_params):
-	# Returns one value between 0 and 1
 	y = torch.nn.functional.linear(x,unpacked_params[0],unpacked_params[1])
 	for layer in range(1,int(len(unpacked_params)/2)):
 		y = torch.relu(y)
 		y = torch.nn.functional.linear(y,unpacked_params[layer*2],unpacked_params[layer*2+1])
 	y = torch.sigmoid(y)
-	return y
+	action_index = torch.argmax(y)
+	#print(f"Action: {action_index}")
+	return action_index
 
 def epsilon_greedy(state, params, layers):
-	# Returns the action 0 or 1
+	# Returns the action index that can be used in env.step()
 	epsilon = 0.01
 	random_number = np.random.random()
 	if random_number < epsilon:
-		action = np.random.choice([0,1])
+		action = np.random.choice(np.arange(0,action_space))
 	else:
 		action = model(state, params).numpy()
-		if action < 0.5:
-			action = 0
-		else:
-			action = 1
 	return action
 
-def evaluate(params_vector, layers, random_action=False):
-	global n_evaluations
-	n_evaluations += 1
-	env = gym.make('CartPole-v0')
-	done = False
-	state = torch.from_numpy(env.reset()).float()
-	rewards = []
-	while not done:
-		if random_action == False:
-			params = unpack_params(params_vector, layers)
-			action = epsilon_greedy(state, params, layers)
-		else:
-			action = np.random.choice([0,1])
-		state_, reward, done, info = env.step(action)
-		state = torch.from_numpy(state_).float()
-		rewards.append(reward)
-	rewards = np.array(rewards)
-	total_reward = np.sum(rewards)
-	return total_reward
+def evaluate(params_vector, layers, repetitions=3, random_action=False):
+	global n_evaluations, env
+	n_evaluations += repetitions
+	reward_per_rep = []
+	for rep in range(repetitions):
+		total_reward = 0
+		done = False
+		t = 0
+		state = torch.from_numpy(env.reset()).float()
+		while not done:
+			if t < 3000:
+				if random_action == False:
+					params = unpack_params(params_vector, layers)
+					action = epsilon_greedy(state, params, layers)
+				else:
+					action = np.random.choice([0,1])
+				state_, reward, done, info = env.step(action)
+				state = torch.from_numpy(state_).float()
+				total_reward += reward
+				t += 1
+			else:
+				done = True
+		reward_per_rep.append(total_reward)
+	reward_per_rep = np.array(reward_per_rep)
+	average_reward_per_rep = np.sum(reward_per_rep)/repetitions
+	#print(f"Evaluation completed with reward: {average_reward_per_rep}")
+	return average_reward_per_rep
 
 ###################################################################
 
@@ -89,12 +95,12 @@ class Swarm():
 		self.layers = info['layers']
 		self.disable_progress_bar = info['disable_progress_bar']
 		self.final_result_from = info['final_result_from']
+		self.c1 = info['c1']
+		self.cmax = info['cmax']
 
 		self.xmin = np.ones(self.dim)*-1*self.search_space
 		self.xmax = np.ones(self.dim)*self.search_space
 		self.vmax = np.absolute(self.xmax - self.xmin)/2
-		self.c1 = 0.7298
-		self.cmax = 1.4960
 
 		self.info = info
 
@@ -113,7 +119,7 @@ class Swarm():
 		p_values = np.inf*np.ones((self.N, self.dim+1))
 		for i, pos in enumerate(initial_positions):
 			p_values[i,0:self.dim] = pos		
-			value = evaluate(pos, self.layers)
+			value = evaluate(pos, self.layers, repetitions=1)
 			p_values[i,self.dim] = value
 		# Create list of particle objects
 		self.particles = []
@@ -130,6 +136,7 @@ class Swarm():
 			particle.informants = np.random.choice(self.particles, particle.k)
 
 	def distribute_swarm(self):
+		#print(f"Distributing particles")
 		# Create array of initial positions and velocities
 		initial_positions = self.random_initial_positions()
 		initial_velocities = self.random_initial_velocities()
@@ -138,6 +145,7 @@ class Swarm():
 
 		# Initiate k informants randomly
 		self.random_informants()
+		#print(f"Particles distributed!")
 
 	def evolve(self):
 		# Initialise array of positions for animation
@@ -150,6 +158,7 @@ class Swarm():
 			particle_rewards = []
 			for i, particle in enumerate(self.particles):
 				particle_reward = particle.step()
+				#print(f"Particle step completed for particle {i}")
 				particle_rewards.append(particle_reward)
 				# Update positions for animation
 				self.positions[time_step,i,:-1] = particle.pos
@@ -184,8 +193,8 @@ class Swarm():
 			for rep in tqdm(range(repetitions)):
 				for i, particle in enumerate(self.particles):
 					final_pos[i,:self.dim] = particle.pos 
-					score = evaluate(particle.pos, particle.layers)
-					all_scores[i,rep] = -1*score
+					score = evaluate(particle.pos, particle.layers, repetitions=5)
+					all_scores[i,rep] = score
 			average_scores = np.average(all_scores, axis=1)
 			avg_scores_matrix = np.inf*np.ones((self.N, self.dim+1))
 			for column in range(self.dim+1):
@@ -210,8 +219,9 @@ class Swarm():
 
 		self.best_value_index = np.argmax(results[:,self.dim])
 		self.best_position = results[self.best_value_index][0:self.dim]
-		self.best_average_scores = np.average(self.all_positions[self.best_value_index,:,:,-1], axis=1)
-		assert self.best_average_scores.shape[0] == self.time_steps
+		# delete following
+		#self.best_average_scores = np.average(self.all_positions[self.best_value_index,:,:,-1], axis=1)
+		assert len(self.avg_rewards) == self.time_steps
 
 		return self.best_position
 
@@ -332,7 +342,7 @@ class Particle(Swarm):
 		return is_allowed
 
 	def step(self):
-		value = evaluate(self.pos, self.layers)
+		value = evaluate(self.pos, self.layers, repetitions=3)
 		self.update_p(value)
 		self.update_g(value)
 		self.find_vel()
@@ -342,23 +352,36 @@ class Particle(Swarm):
 ###################################################################
 
 class Training():
-	def __init__(self, hidden_layers=[15,10], search_space=2,
-		N=9, time_steps=100, repetitions=1, k=3, final_result_from='g-values',
-		show_animation=True, disable_progress_bar=False, disable_printing=False, plot=True):
+	def __init__(self, hidden_layers=[10], search_space=10,
+		N=8, time_steps=60, repetitions=1, k=3, final_result_from='centre of gravity',
+		c1=0.7298, cmax=1.4960, # confidence values taken from a research paper
+		show_animation=True, disable_progress_bar=False, disable_printing=False, plot=True,
+		env_name = 'CartPole-v0'):
 		
 		global n_evaluations
 		n_evaluations = 0
 
-		self.env = 'CartPole-v0'
+		global env, action_space, state_space
+
+		if env_name == 'CartPole-v0':
+			env = gym.make(env_name)
+			action_space = 2
+			state_space = 4
+		elif env_name == 'Acrobot-v1':
+			env = gym.make(env_name)
+			action_space = 3
+			state_space = 6
+		elif env_name == 'RobotArmGame':
+			env = RobotArmGame()
+			action_space = 8
+			state_space = 6
 
 		layers = []
 		for layer in range(len(hidden_layers)+1):
 			if layer == 0:
-				# changed
-				layers.append((hidden_layers[0],4))
+				layers.append((hidden_layers[0],state_space))
 			elif layer == len(hidden_layers):
-				# changed
-				layers.append((1,hidden_layers[-1]))
+				layers.append((action_space,hidden_layers[-1]))
 			else:
 				layers.append((hidden_layers[layer], hidden_layers[layer-1]))
 		self.layers = layers
@@ -377,32 +400,37 @@ class Training():
 			'layers':layers,
 			'final_result_from':final_result_from,
 			'disable_progress_bar':disable_progress_bar,
+			'c1':c1,
+			'cmax':cmax,
 		}
+		if disable_printing == False:
+			print(f"Vector length: {self.vector_length}")
+			print(f"Layers: {hidden_layers}")
 
-		print(f"Vector length: {self.vector_length}")
-		print(f"Layers: {hidden_layers}")
 		# Create swarm and evolve the swarm for the required number of repetitions.
 		swarm = Swarm(self.info)
 		swarm.distribute_swarm()
 		swarm.run_algorithm()
 		self.params_vector = swarm.best_position
-
+		self.average_eplen = evaluate(self.params_vector, self.layers, repetitions=10)
 		if disable_printing == False:
 			print(f"{n_evaluations} evaluations made")
+			print(f"Average episode length: {self.average_eplen}")
 
-		if show_animation == False:
-			pass
-		else:
+		if show_animation == True:
 			swarm.animate_swarm()
+		else:
+			pass
 
 		if plot == True:
-			plt.plot(np.arange(1,time_steps+1), swarm.best_average_scores)
+			plt.plot(np.arange(1,time_steps+1), swarm.avg_rewards)
+			plt.title(f'The average score of the swarm over time for {env_name}')
 			plt.xlabel('Time step')
 			plt.ylabel('Average score of swarm')
 			plt.show()
 
 	def animate(self, episodes=3):
-		env = gym.make(self.env)
+		global env
 		params = unpack_params(self.params_vector, self.layers)
 		for ep in range(episodes):
 			done = False
@@ -413,4 +441,19 @@ class Training():
 				state = torch.from_numpy(state_).float()
 				env.render()
 			env.close()
-			ep += 1
+
+def optimize_layers(training_reps=5):
+	possible_layers = [100,60,30,10]
+	avg_rewards = []
+	for layers in possible_layers:
+		print()
+		print(f"hidden_layers = [{layers}]")
+		rep_rewards = []
+		for rep in range(training_reps):
+			result = Training(hidden_layers=[layers], show_animation=False, disable_printing=True, plot=False)
+			rep_rewards.append(result.average_eplen)
+		avg_rewards.append(np.average(rep_rewards))
+	plt.plot(possible_layers, avg_rewards)
+	plt.xlabel('hidden nodes')
+	plt.ylabel('Average reward')
+	plt.show()
