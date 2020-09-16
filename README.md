@@ -33,17 +33,22 @@ There are many optional parameters that you can pass to the Training class.
 ### Cart Pole
 Using CartPole-v0 it took around 2000 evaluations to arrive at an optimal policy. It is possible to find an optimal policy with as little as 300 evaluations. However, with a small number of particles, the swarm does not reliably converge. 
 The following plot shows how the average score of the swarm increases over time.
-![Acrobot Training Results](https://github.com/kaisalepajoe/Robot-Arm-RL/blob/master/cartpole_training.png)
+
+![Cart Pole Training Results](https://github.com/kaisalepajoe/Robot-Arm-RL/blob/master/cartpole_training.png)
+
 The animation shows the cart balancing the pole in the middle of the screen. In some episodes, the pole starts to tip over and the cart slowly moves to the edge of the screen. This is a typical result for a run with less than 2000 evaluations. The parameters for this training were
 - N = 8
 - k = 3
 - time_steps = 60
 # Acrobot
 The following plot shows the average score for the Acrobot-v1 environment.
-![c8f4da6865e9cf9fee352c763d8e4c05.png](:/39b949c034da4434b30d24f24d95c262)
+
+![Acrobot Training Results](https://github.com/kaisalepajoe/Robot-Arm-RL/blob/master/acrobot_training.png)
+
 # Robot Arm Game
 The algorithm was not able to learn this game, no matter the parameters. The game logic was checked and tested several times but no error was found. Perhaps the action space is too large to find a neural network capable of playing the game.
-![a32ebcd4aaf62acbc9a1fa81c016fe40.png](:/5d4c3f0a61b0486dae2183e21f199e1c)
+
+![Robot Arm Training Results](https://github.com/kaisalepajoe/Robot-Arm-RL/blob/master/robotarm_training.png)
 
 ### Increasing the number of episodes
 Increasing N, time_steps, and repetitions increases the number of episodes completed. It was found that increasing the number of episodes above 2000 did not greatly increase the quality of the policy, and it made training much slower. 
