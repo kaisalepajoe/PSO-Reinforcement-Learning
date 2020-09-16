@@ -33,7 +33,7 @@ There are many optional parameters that you can pass to the Training class.
 ### Cart Pole
 Using CartPole-v0 it took around 2000 evaluations to arrive at an optimal policy. It is possible to find an optimal policy with as little as 300 evaluations. However, with a small number of particles, the swarm does not reliably converge. 
 The following plot shows how the average score of the swarm increases over time.
-![5e18f77c623e84945251a21db2b74e7b.png](:/a5c09fd100284352b73af595de261995)
+![Acrobot Training Results](https://github.com/kaisalepajoe/Robot-Arm-RL/blob/master/cartpole_training.png)
 The animation shows the cart balancing the pole in the middle of the screen. In some episodes, the pole starts to tip over and the cart slowly moves to the edge of the screen. This is a typical result for a run with less than 2000 evaluations. The parameters for this training were
 - N = 8
 - k = 3
